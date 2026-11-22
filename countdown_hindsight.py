@@ -31,3 +31,35 @@ def relabel_group(responses, nums, original_target, relabel_probability, random_
     result["new_target"] = new_target
     result["new_rewards"] = [1.0 if grade_countdown(response, nums, new_target)["success"] else 0.0 for response in responses]
     return result
+
+
+def relabel_responses_individually(responses, nums, original_target, relabel_probability, random_seed_text):
+    """Per-sample hindsight for one all-failed group; the group enters with probability relabel_probability.
+
+    Inside an entered group every response gets a class:
+    - "positive": a relabel candidate (same condition as relabel_group); its own final value becomes its new target, reward 1.
+    - "negative": stopped at parse/arithmetic/usage; prompt unchanged, reward 0.
+    - "untouched": everything else (valid arithmetic whose value is not a candidate); left in the original group.
+    """
+    rng = random.Random(random_seed_text)
+    result = {"selected": rng.random() < relabel_probability, "classes": None, "new_targets": None, "new_rewards": None}
+    if not result["selected"]:
+        return result
+
+    classes, new_targets, new_rewards = [], [], []
+    for response in responses:
+        grade = grade_countdown(response, nums, original_target)
+        if grade["relabelable"] and TARGET_MIN <= grade["final_value"] <= TARGET_MAX:
+            classes.append("positive")
+            new_targets.append(grade["final_value"])
+            new_rewards.append(1.0 if grade_countdown(response, nums, grade["final_value"])["success"] else 0.0)
+        elif grade["stopped_at"] in ("parse", "arithmetic", "usage"):
+            classes.append("negative")
+            new_targets.append(None)
+            new_rewards.append(0.0)
+        else:
+            classes.append("untouched")
+            new_targets.append(None)
+            new_rewards.append(None)
+    result.update(classes=classes, new_targets=new_targets, new_rewards=new_rewards)
+    return result

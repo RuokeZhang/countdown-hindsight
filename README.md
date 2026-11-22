@@ -13,15 +13,16 @@
 | `countdown_hindsight.py` | 全失败组的改写逻辑（候选值、按 p 决定是否改写、新目标下重新判分） |
 | `countdown_hindsight_sampler.py` | A 组用的 `custom_sampler`：在 TQ 里原地改写 prompt/reward，附带 logprob 诊断 |
 | `test_countdown_hindsight.py`、`test_countdown_hindsight_sampler.py` | 改写逻辑单测：`python3 -m unittest test_countdown_hindsight -v`；TQ 集成测试需要在训练机上跑 |
-| `train_countdown_grpo.sh` | GRPO 训练启动脚本（`--seed`、`--lr`、`--reward binary\|validbonus`、`--sampler none\|hindsight`、`--relabel_p`） |
+| `train_countdown_grpo.sh` | GRPO 训练启动脚本（`--seed`、`--lr`、`--reward binary\|validbonus`、`--sampler none\|hindsight\|hindsight_per_sample`、`--relabel_p`） |
 | `countdown_rollout_stats.py` | 离线统计：每步 reward、组统计、格式合法率、止步分布、耗时、验证成功率（hindsight run 按原始目标统计） |
-| `countdown_compare_runs.py` | 多个 run 的对比表，加上 logprob 诊断的区间表 |
+| `countdown_compare_runs.py` | 多个 run 的对比表、退化指标表（熵、混合组、失败回答里"最后一行等于目标数"的占比、每步改写正负样本数），加上 logprob 诊断的区间表 |
 | `HINDSIGHT_NOTES.md` | verl 训练主循环里 hindsight 插入点的调研 |
 | `SMOKE_TEST.md` | 冒烟测试结果汇总（结果文件在 `smoke_results/`） |
 | `results*/` | 零样本评测结果（prompt v1–v4） |
 | `training_results/grpo_binary_seed0/` | 400 步 GRPO baseline 的指标、每步统计、验证集输出（不含 rollout 原文和 checkpoint） |
 | `training_results/grpo_hindsight_p1_seed0/` | A 组（hindsight，p=1）300 步，另有 `relabel_log/`（每条改写样本和 logprob 诊断） |
 | `training_results/grpo_validbonus_seed0/` | B 组（合法格式 +0.1）300 步 |
+| `training_results/grpo_hindsight_p0.25_seed0/` | C 组（整组改写，p=0.25），只跑到第 50 步（第 51–56 步的原始数据只在 OSS 的 results tar 里，`rollouts_after_step50/`，不计入统计） |
 | `training_results/three_arm_comparison.md` | 三组对比表 |
 
 完整 rollout 和全部 checkpoint 在 Aliyun OSS：`oss://ruoke-h200-export/countdown-grpo-20261122/`（us-west-1）。checkpoint 是 `tar` 后按 4GB 切分的，恢复方法：`cat global_step_N.tar.part_* | tar -xf -`，校验文件为 `checkpoints/checkpoint_parts.md5`。

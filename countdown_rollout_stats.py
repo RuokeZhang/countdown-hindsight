@@ -33,20 +33,57 @@ def has_too_many_lines(output, num_count):
     return len(lines) > num_count - 1 and all(LINE_PATTERN.match(line) for line in lines)
 
 
-def load_original_targets(run_dir, step):
-    """uid -> original target for groups the hindsight sampler relabeled at this step (empty for other runs)."""
+def last_line_claims_target(output, target):
+    """True when the right-hand side of the last line's last '=' is the target number."""
+    lines = [line.strip() for line in output.strip().split("\n") if line.strip()]
+    if not lines or "=" not in lines[-1]:
+        return False
+    try:
+        return float(lines[-1].rsplit("=", 1)[1].strip()) == target
+    except ValueError:
+        return False
+
+
+def load_relabel_rows(run_dir, step):
     relabel_path = os.path.join(run_dir, "relabel_log", f"{step}.jsonl")
-    if not os.path.exists(relabel_path):
-        return {}
-    return {row["uid"]: int(row["original_target"]) for row in map(json.loads, open(relabel_path))}
+    return [json.loads(line) for line in open(relabel_path)] if os.path.exists(relabel_path) else []
 
 
-def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type):
+def relabeled_rows(relabel_rows):
+    """Rows whose samples were actually rewritten (per-sample rows only when that step's pool was built)."""
+    return [row for row in relabel_rows if row.get("pool_built", True)]
+
+
+def load_original_targets(relabel_rows):
+    """uid -> original target for groups the hindsight sampler rewrote at this step (empty for other runs)."""
+    return {row["uid"]: int(row["original_target"]) for row in relabeled_rows(relabel_rows)}
+
+
+def load_training_uids(relabel_rows):
+    """rollout key -> uid GRPO normalized it under, for per-sample relabeling (empty otherwise)."""
+    return {key: training_uid for row in relabeled_rows(relabel_rows) if "training_uids" in row for key, training_uid in zip(row["keys"], row["training_uids"])}
+
+
+def hindsight_sample_counts(relabel_rows):
+    """(positive, negative) relabeled samples: pooled samples for per-sample mode, rewritten-group samples for group mode."""
+    positives = negatives = 0
+    for row in relabeled_rows(relabel_rows):
+        if "classes" in row:
+            positives += row["classes"].count("positive")
+            negatives += row["classes"].count("negative")
+        else:
+            positives += int(sum(row["new_rewards"]))
+            negatives += len(row["new_rewards"]) - int(sum(row["new_rewards"]))
+    return positives, negatives
+
+
+def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type, training_uid_by_key=None):
     records = []
     for row in rollout_rows:
         nums_text, target_text = PROMPT_PATTERN.search(row["input"]).groups()
         nums = [int(n) for n in nums_text.split(",")]
         group_id = row["uid"].split("_")[0]
+        training_group_id = (training_uid_by_key or {}).get(row["uid"], group_id)
         training_target = int(target_text)
         original_target = original_target_by_uid.get(group_id, training_target)
         grade = grade_countdown(row["output"], nums, original_target)
@@ -54,6 +91,7 @@ def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, rew
         records.append({
             **grade,
             "group_id": group_id,
+            "training_group_id": training_group_id,
             "problem_id": problem_id_by_multiset.get(tuple(sorted(nums))),
             "nums": nums,
             "target": original_target,
@@ -63,14 +101,15 @@ def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, rew
             "score": float(row["score"]),
             "expected_training_reward": training_reward_from_grade(training_grade, reward_type),
             "too_many_lines": grade["stopped_at"] == "parse" and has_too_many_lines(row["output"], len(nums)),
+            "claims_target": last_line_claims_target(row["output"], original_target),
         })
-    group_ids = sorted({r["group_id"] for r in records})
+    group_ids = sorted({r["training_group_id"] for r in records})
     group_index = {group_id: i for i, group_id in enumerate(group_ids)}
     scores = torch.tensor([[r["score"]] for r in records])
     advantages, _ = compute_grpo_outcome_advantage(
         token_level_rewards=scores,
         response_mask=torch.ones_like(scores),
-        index=[group_index[r["group_id"]] for r in records],
+        index=[group_index[r["training_group_id"]] for r in records],
         norm_adv_by_std_in_grpo=True,
     )
     for record, advantage in zip(records, advantages[:, 0].tolist()):
@@ -84,10 +123,10 @@ def summarize_step(records):
     training_scores_by_group = defaultdict(list)
     for record in records:
         success_by_group[record["group_id"]].append(float(record["success"]))
-        training_scores_by_group[record["group_id"]].append(record["score"])
+        training_scores_by_group[record["training_group_id"]].append(record["score"])
     failed = [r for r in records if not r["success"]]
     zero_score_groups = {g for g, s in training_scores_by_group.items() if max(s) == 0.0}
-    zero_score_advantages = [r["advantage"] for r in records if r["group_id"] in zero_score_groups]
+    zero_score_advantages = [r["advantage"] for r in records if r["training_group_id"] in zero_score_groups]
     return {
         "num_samples": len(records),
         "num_groups": len(success_by_group),
@@ -102,11 +141,26 @@ def summarize_step(records):
         **{f"fail_stop_{stage}": sum(r["stopped_at"] == stage for r in failed) / max(len(failed), 1) for stage in STOP_STAGES},
         "parse_fail_too_many_lines": sum(r["too_many_lines"] for r in records),
         "relabelable_rate_of_failed": sum(r["relabelable"] for r in failed) / max(len(failed), 1),
+        "fail_claims_target_rate": sum(r["claims_target"] for r in failed) / max(len(failed), 1),
         "relabeled_groups": len({r["group_id"] for r in records if r["relabeled"]}),
         "max_abs_advantage_in_all_fail_groups": max((abs(a) for a in zero_score_advantages), default=0.0),
         "offline_advantage_max": max(r["advantage"] for r in records),
         "offline_advantage_min": min(r["advantage"] for r in records),
     }
+
+
+def validation_claims_target(run_dir, step):
+    """Share of failed greedy validation outputs whose last line claims the target."""
+    validation_path = os.path.join(run_dir, "validation", f"{step}.jsonl")
+    if not os.path.exists(validation_path):
+        return {}
+    failed_claims = []
+    for row in map(json.loads, open(validation_path)):
+        nums_text, target_text = PROMPT_PATTERN.search(row["input"]).groups()
+        nums, target = [int(n) for n in nums_text.split(",")], int(target_text)
+        if not grade_countdown(row["output"], nums, target)["success"]:
+            failed_claims.append(last_line_claims_target(row["output"], target))
+    return {"val_failed": len(failed_claims), "val_fail_claims_target_rate": sum(failed_claims) / max(len(failed_claims), 1)}
 
 
 def load_logged_metrics(run_dir):
@@ -133,11 +187,15 @@ def main():
     step_summaries = []
     for path in rollout_paths:
         step = int(os.path.basename(path).split(".")[0])
-        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset, load_original_targets(args.run_dir, step), args.reward_type)
+        relabel_rows = load_relabel_rows(args.run_dir, step)
+        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset, load_original_targets(relabel_rows), args.reward_type, load_training_uids(relabel_rows))
         logged = logged_by_step.get(step, {})
+        hindsight_positives, hindsight_negatives = hindsight_sample_counts(relabel_rows)
         summary = {
             "step": step,
             **summarize_step(records),
+            "hindsight_positive_samples": hindsight_positives,
+            "hindsight_negative_samples": hindsight_negatives,
             "logged_advantage_max": logged.get("critic/advantages/max"),
             "logged_advantage_min": logged.get("critic/advantages/min"),
             "logged_score_mean": logged.get("critic/score/mean"),
@@ -164,7 +222,7 @@ def main():
         three = logged.get("val-core/countdown_3/acc/mean@1")
         four = logged.get("val-core/countdown_4/acc/mean@1")
         if three is not None and four is not None:
-            validation_rows.append({"step": step, "val_greedy_success_all": (three + four) / 2, "val_greedy_success_3": three, "val_greedy_success_4": four})
+            validation_rows.append({"step": step, "val_greedy_success_all": (three + four) / 2, "val_greedy_success_3": three, "val_greedy_success_4": four, **validation_claims_target(args.run_dir, step)})
 
     with open(os.path.join(args.run_dir, "step_stats.jsonl"), "w") as stats_file:
         for summary in step_summaries:

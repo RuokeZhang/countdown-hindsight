@@ -4,6 +4,7 @@ import math
 import os
 
 COMPARE_STEPS = [0, 50, 100, 150, 200, 250, 300]
+DEGENERATION_STEPS = [0, 25, 50, 100, 150, 200, 250, 300]
 DIAGNOSTIC_INTERVALS = [(1, 25), (26, 50), (51, 100), (101, 200), (201, 300)]
 DIAGNOSTIC_MEANS = ["logp_diff_success_mean", "logp_diff_success_median", "logp_diff_fail_mean", "logp_diff_fail_median", "logp_abs_diff_small_rate"]
 DIAGNOSTIC_COUNTS = ["logp_diff_success_count", "logp_diff_fail_count"]
@@ -29,18 +30,22 @@ def format_number(value):
     return "—" if value is None else f"{value:.1f}"
 
 
+def format_entropy(value):
+    return "—" if value is None else f"{value:.3f}"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", nargs="+", required=True, help="name=run_dir pairs")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--diagnostic_run", default=None, help="run_dir of the hindsight run for the log-prob table")
+    parser.add_argument("--diagnostic_runs", nargs="*", default=[], help="name=run_dir pairs of hindsight runs for the log-prob table")
     args = parser.parse_args()
 
     runs = [run.split("=", 1) for run in args.runs]
     loaded = {name: (load_jsonl_by_step(os.path.join(run_dir, "validation_stats.jsonl")), load_jsonl_by_step(os.path.join(run_dir, "step_stats.jsonl"))) for name, run_dir in runs}
 
     lines = [
-        "# Countdown: baseline vs hindsight vs valid-bonus",
+        "# Countdown run comparison",
         "",
         f"Validation = greedy success on the 512-problem val set. Training columns are means over steps center-{WINDOW_HALF_WIDTH - 1}..center+{WINDOW_HALF_WIDTH} (steps 1-10 for step 0), computed against the original target.",
         "",
@@ -56,11 +61,30 @@ def main():
                 f"{format_percent(val.get('val_greedy_success_4'))} | {format_percent(window_mean(step_stats, step, 'parse_ok_rate'))} | "
                 f"{format_number(window_mean(step_stats, step, 'parse_fail_too_many_lines'))} | {format_percent(window_mean(step_stats, step, 'mixed_group_rate'))} |"
             )
-    if args.diagnostic_run:
-        step_stats = load_jsonl_by_step(os.path.join(args.diagnostic_run, "step_stats.jsonl"))
+    lines += [
+        "",
+        "## Degeneration signals",
+        "",
+        "Same windows as above. \"fail claims target\" = share of failed responses whose last line ends in \"= <original target>\". "
+        "Hindsight positives/negatives per step: per-sample runs count the samples normalized together in the step's new uid; "
+        "group runs count reward-1 / reward-0 samples inside rewritten groups.",
+        "",
+        "| step | run | entropy | mixed groups | train fail claims target | val fail claims target | hindsight positives / step | hindsight negatives / step |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for step in DEGENERATION_STEPS:
+        for name, _ in runs:
+            validation, step_stats = loaded[name]
+            lines.append(
+                f"| {step} | {name} | {format_entropy(window_mean(step_stats, step, 'entropy'))} | {format_percent(window_mean(step_stats, step, 'mixed_group_rate'))} | "
+                f"{format_percent(window_mean(step_stats, step, 'fail_claims_target_rate'))} | {format_percent(validation.get(step, {}).get('val_fail_claims_target_rate'))} | "
+                f"{format_number(window_mean(step_stats, step, 'hindsight_positive_samples'))} | {format_number(window_mean(step_stats, step, 'hindsight_negative_samples'))} |"
+            )
+    for diagnostic_name, diagnostic_dir in (run.split("=", 1) for run in args.diagnostic_runs):
+        step_stats = load_jsonl_by_step(os.path.join(diagnostic_dir, "step_stats.jsonl"))
         lines += [
             "",
-            "## Hindsight log-prob diagnostic: logp_new - logp_orig (sum over response tokens)",
+            f"## Hindsight log-prob diagnostic ({diagnostic_name}): logp_new - logp_orig (sum over response tokens)",
             "",
             "Per-step summaries averaged over the steps in each interval (steps with no relabeled sample of a kind are skipped); counts are totals.",
             "",

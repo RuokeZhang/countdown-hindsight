@@ -5,6 +5,8 @@ import os
 import statistics
 import sys
 import time
+import uuid
+import random
 from collections import Counter, defaultdict
 
 import torch
@@ -20,7 +22,7 @@ from verl.workers.utils.padding import response_from_nested
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from countdown_hindsight import relabel_group
+from countdown_hindsight import relabel_group, relabel_responses_individually
 from run_countdown_baseline import build_prompt
 
 PROMPT_VERSION = "v3"
@@ -31,7 +33,12 @@ SMALL_LOGP_DIFF = 0.05
 class HindsightRelabelReplayBuffer(ReplayBuffer):
     """Sync replay buffer that relabels all-failed Countdown groups in place before the PPO update.
 
-    sampler_kwargs: seed, relabel_probability, relabel_log_dir, model_path, logprob_diagnostic.
+    sampler_kwargs: seed, relabel_probability, relabel_log_dir, model_path, logprob_diagnostic, relabel_mode, advantage_log.
+
+    relabel_mode "group" (arms A/C) rewrites a whole all-failed group to one new target. relabel_mode "per_sample" (arm D)
+    gives each relabel candidate its own value as target (reward 1), keeps parse/arithmetic/usage failures on their
+    original prompt (reward 0), and moves both into one new uid per step so GRPO normalizes them together; the other
+    responses stay in their original all-zero group (advantage 0).
 
     With logprob_diagnostic, the trainer instance's _compute_old_log_prob is wrapped (the trainer is reached through
     refill_fn, a bound method of it). After verl computes old_log_probs for the whole batch, the wrapper runs one extra
@@ -54,19 +61,44 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             mm_processor_kwargs={},
             processor=None,
         )
+        self.relabel_mode = self.sampler_kwargs.get("relabel_mode", "group")
+        if self.relabel_mode not in ("group", "per_sample"):
+            raise ValueError(f"unknown relabel_mode {self.relabel_mode}")
         self.logprob_diagnostic = bool(self.sampler_kwargs.get("logprob_diagnostic", False))
+        self.advantage_log = bool(self.sampler_kwargs.get("advantage_log", False))
         self.pending_diagnostic = None
         self.pending_log_rows = None
+        self.last_train_step = None
+        if self.logprob_diagnostic or self.advantage_log:
+            # The sampler is built inside PPOTrainer.__init__ (refill_fn is a bound method of it); actor_rollout_wg only
+            # exists after trainer.init(), so it is looked up when the diagnostic runs.
+            self.trainer = getattr(self.refill_fn, "__self__", None)
+            if self.trainer is None or not hasattr(self.trainer, "_compute_old_log_prob") or not hasattr(self.trainer, "config"):
+                raise RuntimeError("logprob_diagnostic/advantage_log need refill_fn to be a bound method of the verl PPOTrainer")
         if self.logprob_diagnostic:
             self._install_logprob_diagnostic()
+        if self.advantage_log:
+            self._install_advantage_log()
+
+    def _install_advantage_log(self):
+        """Log every sample's advantage after verl computes it (logging only, used to check the GRPO grouping)."""
+        trainer = self.trainer
+        compute_advantage = trainer._compute_advantage
+
+        def compute_advantage_then_log(batch, metrics):
+            output_batch = compute_advantage(batch, metrics)
+            # verl stores advantages as a response-only nested tensor (response_to_nested), one row per sample.
+            data = tq.kv_batch_get(keys=batch.keys, partition_id=batch.partition_id, select_fields=["uid", "advantages"])
+            os.makedirs(os.path.join(self.relabel_log_dir, "advantages"), exist_ok=True)
+            with open(os.path.join(self.relabel_log_dir, "advantages", f"{self.last_train_step}.jsonl"), "w") as log_file:
+                for key, uid, values in zip(batch.keys, list(data["uid"]), data["advantages"].unbind(0)):
+                    log_file.write(json.dumps({"key": key, "uid": uid, "advantage": float(values[0]), "token_spread": float(values.max() - values.min())}) + "\n")
+            return output_batch
+
+        trainer._compute_advantage = compute_advantage_then_log
 
     def _install_logprob_diagnostic(self):
-        # The sampler is built inside PPOTrainer.__init__; actor_rollout_wg only exists after trainer.init(), so it is
-        # looked up when the diagnostic runs.
-        trainer = getattr(self.refill_fn, "__self__", None)
-        if trainer is None or not hasattr(trainer, "_compute_old_log_prob") or not hasattr(trainer, "config"):
-            raise RuntimeError("logprob_diagnostic needs refill_fn to be a bound method of the verl PPOTrainer")
-        self.trainer = trainer
+        trainer = self.trainer
         self.log_prob_micro_batch_size = int(trainer.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu)
         compute_old_log_prob = trainer._compute_old_log_prob
 
@@ -110,6 +142,102 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
         for index, uid in enumerate(uids):
             indices_by_uid[uid].append(index)
 
+        if self.relabel_mode == "group":
+            plan, log_rows, metrics = self._plan_group_relabel(keys, uids, scores, response_texts, extra_infos, indices_by_uid, global_steps)
+        else:
+            plan, log_rows, metrics = self._plan_per_sample_relabel(keys, uids, scores, response_texts, extra_infos, indices_by_uid, global_steps)
+
+        # plan: batch index -> (new_target or None to keep the prompt, new_reward, new_uid or None to keep the uid)
+        relabel_indices = sorted(plan)
+        new_tags = [dict(tag) for tag in batch.tags]
+        prompt_changed_indices = [i for i in relabel_indices if plan[i][0] is not None]
+        original_samples_by_index = {}
+
+        if relabel_indices:
+            relabel_keys = [keys[i] for i in relabel_indices]
+            full_data = tq.kv_batch_get(keys=relabel_keys, partition_id=batch.partition_id)
+            new_samples = []
+            for local_index, batch_index in enumerate(relabel_indices):
+                sample = self._copy_sample(full_data[local_index])
+                new_target, new_reward, new_uid = plan[batch_index]
+                nums = [int(n) for n in extra_infos[batch_index]["nums"]]
+
+                original_prompt_ids = self._build_prompt_ids(list(sample["raw_prompt"]))
+                if not torch.equal(original_prompt_ids, sample["prompts"]):
+                    raise RuntimeError(f"Rebuilt original prompt does not match rollout prompt for key {keys[batch_index]}")
+
+                if new_target is not None:
+                    original_samples_by_index[batch_index] = self._copy_sample(full_data[local_index])
+                    new_messages = [{"role": "user", "content": build_prompt({"nums": nums, "target": new_target}, PROMPT_VERSION)}]
+                    new_prompt_ids = self._build_prompt_ids(new_messages)
+                    responses = sample["responses"]
+                    input_ids = torch.cat([new_prompt_ids, responses], dim=0)
+                    attention_mask = torch.ones_like(input_ids, dtype=torch.int64)
+                    position_ids = compute_position_id_with_mask(attention_mask.unsqueeze(0)).squeeze(0).to(sample["position_ids"].dtype)
+                    sample["prompts"] = new_prompt_ids
+                    sample["input_ids"] = input_ids
+                    sample["position_ids"] = position_ids
+                    if "attention_mask" in sample:
+                        sample["attention_mask"] = attention_mask
+                    sample["raw_prompt"] = new_messages
+                    sample["reward_model"] = {**sample["reward_model"], "ground_truth": new_target}
+                    sample["extra_info"] = {**sample["extra_info"], "target": new_target}
+
+                    tag = new_tags[batch_index]
+                    tag["prompt_len"] = int(new_prompt_ids.size(0))
+                    tag["seq_len"] = int(new_prompt_ids.size(0) + responses.size(0))
+                    assert tag["response_len"] == int(responses.size(0))
+
+                rm_scores = torch.zeros_like(sample["rm_scores"])
+                rm_scores[-1] = new_reward
+                sample["rm_scores"] = rm_scores
+                if "reward_extra_info" in sample.get("extra_fields", {}):
+                    sample["extra_fields"]["reward_extra_info"]["acc"] = new_reward
+                if new_uid is not None:
+                    sample["uid"] = new_uid
+                new_samples.append(sample)
+
+            tq.kv_batch_put(
+                keys=relabel_keys,
+                partition_id=batch.partition_id,
+                fields=list_of_dict_to_tensordict(new_samples),
+                tags=[new_tags[i] for i in relabel_indices],
+            )
+
+            stored = tq.kv_batch_get(keys=relabel_keys, partition_id=batch.partition_id, select_fields=["input_ids", "rm_scores", "uid"])
+            for stored_input_ids, stored_rm_scores, stored_uid, sample in zip(stored["input_ids"].unbind(0), stored["rm_scores"].unbind(0), list(stored["uid"]), new_samples):
+                if not torch.equal(stored_input_ids, sample["input_ids"]) or not torch.equal(stored_rm_scores, sample["rm_scores"]) or stored_uid != sample["uid"]:
+                    raise RuntimeError("Relabeled sample read back from TransferQueue differs from what was written")
+
+        # The diagnostic re-scores, under the ORIGINAL prompt, every sample whose prompt was changed.
+        control_keys, control_count = [], 0
+        if self.logprob_diagnostic and prompt_changed_indices:
+            changed_key_set = {keys[i] for i in prompt_changed_indices}
+            control_count = self.log_prob_micro_batch_size - len(prompt_changed_indices) % self.log_prob_micro_batch_size
+            control_keys = [key for key in keys if key not in changed_key_set][:control_count]
+        if self.logprob_diagnostic and prompt_changed_indices and len(control_keys) == control_count:
+            control_data = tq.kv_batch_get(keys=control_keys, partition_id=batch.partition_id)
+            control_samples = [self._copy_sample(control_data[i]) for i in range(len(control_keys))]
+            self.pending_diagnostic = {
+                "step": global_steps,
+                "partition_id": batch.partition_id,
+                "real_keys": [keys[i] for i in prompt_changed_indices] + control_keys,
+                "num_relabeled": len(prompt_changed_indices),
+                "samples": [original_samples_by_index[i] for i in prompt_changed_indices] + control_samples,
+                "tags": [batch.tags[i] for i in prompt_changed_indices] + [batch.tags[keys.index(key)] for key in control_keys],
+                "new_rewards": [plan[i][1] for i in prompt_changed_indices],
+            }
+            self.pending_log_rows = log_rows
+        else:
+            self._write_relabel_log(global_steps, log_rows)
+
+        self.last_train_step = global_steps
+        with open(os.path.join(self.relabel_log_dir, "summary.jsonl"), "a") as summary_file:
+            summary_file.write(json.dumps({"step": global_steps, **metrics}) + "\n")
+
+        return dataclasses.replace(batch, tags=new_tags), metrics
+
+    def _plan_group_relabel(self, keys, uids, scores, response_texts, extra_infos, indices_by_uid, global_steps):
         decisions = {}
         all_fail_groups = 0
         for uid, indices in indices_by_uid.items():
@@ -125,99 +253,23 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
                 decisions[uid] = (decision, nums, int(extra_info["target"]))
 
         relabeled_uids = [uid for uid, (decision, _, _) in decisions.items() if decision["relabeled"]]
-        relabel_indices = [i for uid in relabeled_uids for i in indices_by_uid[uid]]
-        new_tags = [dict(tag) for tag in batch.tags]
-        log_rows = []
-
-        if relabel_indices:
-            relabel_keys = [keys[i] for i in relabel_indices]
-            full_data = tq.kv_batch_get(keys=relabel_keys, partition_id=batch.partition_id)
-            new_samples, original_samples = [], []
-            for local_index, batch_index in enumerate(relabel_indices):
-                sample = self._copy_sample(full_data[local_index])
-                original_samples.append(self._copy_sample(full_data[local_index]))
-                uid = uids[batch_index]
-                decision, nums, original_target = decisions[uid]
-                new_target = decision["new_target"]
-                new_reward = decision["new_rewards"][indices_by_uid[uid].index(batch_index)]
-
-                original_prompt_ids = self._build_prompt_ids(list(sample["raw_prompt"]))
-                if not torch.equal(original_prompt_ids, sample["prompts"]):
-                    raise RuntimeError(f"Rebuilt original prompt does not match rollout prompt for key {keys[batch_index]}")
-
-                new_messages = [{"role": "user", "content": build_prompt({"nums": nums, "target": new_target}, PROMPT_VERSION)}]
-                new_prompt_ids = self._build_prompt_ids(new_messages)
-                responses = sample["responses"]
-                input_ids = torch.cat([new_prompt_ids, responses], dim=0)
-                attention_mask = torch.ones_like(input_ids, dtype=torch.int64)
-                position_ids = compute_position_id_with_mask(attention_mask.unsqueeze(0)).squeeze(0).to(sample["position_ids"].dtype)
-                rm_scores = torch.zeros_like(sample["rm_scores"])
-                rm_scores[-1] = new_reward
-
-                sample["prompts"] = new_prompt_ids
-                sample["input_ids"] = input_ids
-                sample["position_ids"] = position_ids
-                if "attention_mask" in sample:
-                    sample["attention_mask"] = attention_mask
-                sample["rm_scores"] = rm_scores
-                sample["raw_prompt"] = new_messages
-                sample["reward_model"] = {**sample["reward_model"], "ground_truth": new_target}
-                sample["extra_info"] = {**sample["extra_info"], "target": new_target}
-                if "reward_extra_info" in sample.get("extra_fields", {}):
-                    sample["extra_fields"]["reward_extra_info"]["acc"] = new_reward
-                new_samples.append(sample)
-
-                tag = new_tags[batch_index]
-                tag["prompt_len"] = int(new_prompt_ids.size(0))
-                tag["seq_len"] = int(new_prompt_ids.size(0) + responses.size(0))
-                assert tag["response_len"] == int(responses.size(0))
-
-            tq.kv_batch_put(
-                keys=relabel_keys,
-                partition_id=batch.partition_id,
-                fields=list_of_dict_to_tensordict(new_samples),
-                tags=[new_tags[i] for i in relabel_indices],
-            )
-
-            stored = tq.kv_batch_get(keys=relabel_keys, partition_id=batch.partition_id, select_fields=["input_ids", "rm_scores"])
-            for stored_input_ids, stored_rm_scores, sample in zip(stored["input_ids"].unbind(0), stored["rm_scores"].unbind(0), new_samples):
-                if not torch.equal(stored_input_ids, sample["input_ids"]) or not torch.equal(stored_rm_scores, sample["rm_scores"]):
-                    raise RuntimeError("Relabeled sample read back from TransferQueue differs from what was written")
-
-            for uid in relabeled_uids:
-                decision, nums, original_target = decisions[uid]
-                log_rows.append({
-                    "step": global_steps,
-                    "uid": uid,
-                    "nums": nums,
-                    "original_target": original_target,
-                    "new_target": decision["new_target"],
-                    "candidate_values": decision["candidate_values"],
-                    "responses": [response_texts[i] for i in indices_by_uid[uid]],
-                    "original_rewards": [scores[i] for i in indices_by_uid[uid]],
-                    "new_rewards": decision["new_rewards"],
-                })
-
-        control_keys, control_count = [], 0
-        if self.logprob_diagnostic and relabel_indices:
-            relabeled_key_set = set(relabel_keys)
-            control_count = self.log_prob_micro_batch_size - len(relabel_indices) % self.log_prob_micro_batch_size
-            control_keys = [key for key in keys if key not in relabeled_key_set][:control_count]
-        if self.logprob_diagnostic and relabel_indices and len(control_keys) == control_count:
-            control_data = tq.kv_batch_get(keys=control_keys, partition_id=batch.partition_id)
-            control_samples = [self._copy_sample(control_data[i]) for i in range(len(control_keys))]
-            self.pending_diagnostic = {
+        plan, log_rows = {}, []
+        for uid in relabeled_uids:
+            decision, nums, original_target = decisions[uid]
+            for position, batch_index in enumerate(indices_by_uid[uid]):
+                plan[batch_index] = (decision["new_target"], decision["new_rewards"][position], None)
+            log_rows.append({
                 "step": global_steps,
-                "partition_id": batch.partition_id,
-                "real_keys": relabel_keys + control_keys,
-                "num_relabeled": len(relabel_keys),
-                "samples": original_samples + control_samples,
-                "tags": [batch.tags[i] for i in relabel_indices] + [batch.tags[keys.index(key)] for key in control_keys],
-                "new_rewards": [decisions[uids[i]][0]["new_rewards"][indices_by_uid[uids[i]].index(i)] for i in relabel_indices],
-            }
-            self.pending_log_rows = log_rows
-        else:
-            self._write_relabel_log(global_steps, log_rows)
+                "uid": uid,
+                "keys": [keys[i] for i in indices_by_uid[uid]],
+                "nums": nums,
+                "original_target": original_target,
+                "new_target": decision["new_target"],
+                "candidate_values": decision["candidate_values"],
+                "responses": [response_texts[i] for i in indices_by_uid[uid]],
+                "original_rewards": [scores[i] for i in indices_by_uid[uid]],
+                "new_rewards": decision["new_rewards"],
+            })
 
         ones_per_group = Counter(int(sum(row["new_rewards"])) for row in log_rows)
         metrics = {
@@ -225,16 +277,69 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             "hindsight/all_fail_groups": all_fail_groups,
             "hindsight/eligible_groups": len(decisions),
             "hindsight/relabeled_groups": len(relabeled_uids),
-            "hindsight/relabeled_samples": len(relabel_indices),
+            "hindsight/relabeled_samples": len(plan),
             "hindsight/relabeled_all_success_groups": ones_per_group[8],
             "hindsight/new_reward_ones_mean": sum(sum(row["new_rewards"]) for row in log_rows) / max(len(log_rows), 1),
         }
         for ones in range(1, 9):
             metrics[f"hindsight/relabeled_groups_with_{ones}_ones"] = ones_per_group[ones]
-        with open(os.path.join(self.relabel_log_dir, "summary.jsonl"), "a") as summary_file:
-            summary_file.write(json.dumps({"step": global_steps, **metrics}) + "\n")
+        return plan, log_rows, metrics
 
-        return dataclasses.replace(batch, tags=new_tags), metrics
+    def _plan_per_sample_relabel(self, keys, uids, scores, response_texts, extra_infos, indices_by_uid, global_steps):
+        all_fail_groups = 0
+        log_rows = []
+        for uid, indices in indices_by_uid.items():
+            if any(scores[i] != 0.0 for i in indices):
+                continue
+            all_fail_groups += 1
+            extra_info = extra_infos[indices[0]]
+            nums = [int(n) for n in extra_info["nums"]]
+            original_target = int(extra_info["target"])
+            random_seed_text = f"{self.seed}:{global_steps}:{int(extra_info['problem_id'])}"
+            decision = relabel_responses_individually([response_texts[i] for i in indices], nums, original_target, self.relabel_probability, random_seed_text)
+            if not decision["selected"]:
+                continue
+            log_rows.append({
+                "step": global_steps,
+                "uid": uid,
+                "keys": [keys[i] for i in indices],
+                "nums": nums,
+                "original_target": original_target,
+                "responses": [response_texts[i] for i in indices],
+                "original_rewards": [scores[i] for i in indices],
+                "classes": decision["classes"],
+                "new_targets": decision["new_targets"],
+                "new_rewards": decision["new_rewards"],
+            })
+
+        key_index = {key: i for i, key in enumerate(keys)}
+        pooled = [(key_index[key], cls, target, reward) for row in log_rows for key, cls, target, reward in zip(row["keys"], row["classes"], row["new_targets"], row["new_rewards"]) if cls != "untouched"]
+        positives = sum(cls == "positive" for _, cls, _, _ in pooled)
+        negatives = len(pooled) - positives
+        # Without a positive there is nothing to learn from (and verl treats a one-sample group as mean 0, std 1).
+        pool_built = positives >= 1 and len(pooled) >= 2
+        pool_uid = str(uuid.UUID(int=random.Random(f"{self.seed}:{global_steps}:pool").getrandbits(128), version=4)) if pool_built else None
+        assert pool_uid is None or ("_" not in pool_uid and pool_uid not in indices_by_uid)
+
+        plan = {}
+        if pool_built:
+            for batch_index, cls, target, reward in pooled:
+                plan[batch_index] = (target, reward, pool_uid)
+        for row in log_rows:
+            row["pool_built"] = pool_built
+            row["training_uids"] = [pool_uid if (pool_built and cls != "untouched") else row["uid"] for cls in row["classes"]]
+
+        metrics = {
+            "hindsight/num_samples": len(keys),
+            "hindsight/all_fail_groups": all_fail_groups,
+            "hindsight/selected_groups": len(log_rows),
+            "hindsight/pool_built": int(pool_built),
+            "hindsight/pooled_positive_samples": positives if pool_built else 0,
+            "hindsight/pooled_negative_samples": negatives if pool_built else 0,
+            "hindsight/untouched_samples_in_selected_groups": sum(cls == "untouched" for row in log_rows for cls in row["classes"]),
+            "hindsight/selected_groups_with_positive": sum("positive" in row["classes"] for row in log_rows),
+        }
+        return plan, log_rows, metrics
 
     def _write_relabel_log(self, global_steps, log_rows):
         with open(os.path.join(self.relabel_log_dir, f"{global_steps}.jsonl"), "w") as log_file:
@@ -285,14 +390,10 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
 
         log_rows = self.pending_log_rows
         self.pending_log_rows = None
-        group_start = 0
+        diagnosed = {key: (new, orig, diff, tokens) for key, new, orig, diff, tokens in zip(pending["real_keys"][:num_relabeled], logp_new, logp_orig, diffs, response_tokens[:num_relabeled])}
         for row in log_rows:
-            group_slice = slice(group_start, group_start + len(row["responses"]))
-            group_start += len(row["responses"])
-            row["logp_new"] = logp_new[group_slice]
-            row["logp_orig"] = logp_orig[group_slice]
-            row["logp_diff"] = diffs[group_slice]
-            row["response_tokens"] = response_tokens[:num_relabeled][group_slice]
+            values = [diagnosed.get(key, (None, None, None, None)) for key in row["keys"]]
+            row["logp_new"], row["logp_orig"], row["logp_diff"], row["response_tokens"] = (list(column) for column in zip(*values))
         self._write_relabel_log(step, log_rows)
 
         diagnostic_metrics = {
