@@ -9,12 +9,20 @@
 | `run_countdown_baseline.py` | 零样本评测（vLLM），以及 prompt v1–v4 的定义（`build_prompt`） |
 | `prepare_countdown_data.py` | 生成 verl 用的 train/val parquet（prompt v3） |
 | `countdown_reward.py` | verl 自定义 reward：四步全过记 1.0，否则 0.0 |
-| `train_countdown_grpo.sh` | GRPO 训练启动脚本（seed 和学习率可传参） |
-| `countdown_rollout_stats.py` | 离线统计：每步 reward、组统计、格式合法率、止步分布、耗时、验证成功率 |
+| `countdown_reward_validbonus.py` | B 组 reward：四步全过 1.0，过了 parse/arithmetic/usage 但没中目标 0.1，否则 0.0 |
+| `countdown_hindsight.py` | 全失败组的改写逻辑（候选值、按 p 决定是否改写、新目标下重新判分） |
+| `countdown_hindsight_sampler.py` | A 组用的 `custom_sampler`：在 TQ 里原地改写 prompt/reward，附带 logprob 诊断 |
+| `test_countdown_hindsight.py`、`test_countdown_hindsight_sampler.py` | 改写逻辑单测：`python3 -m unittest test_countdown_hindsight -v`；TQ 集成测试需要在训练机上跑 |
+| `train_countdown_grpo.sh` | GRPO 训练启动脚本（`--seed`、`--lr`、`--reward binary\|validbonus`、`--sampler none\|hindsight`、`--relabel_p`） |
+| `countdown_rollout_stats.py` | 离线统计：每步 reward、组统计、格式合法率、止步分布、耗时、验证成功率（hindsight run 按原始目标统计） |
+| `countdown_compare_runs.py` | 多个 run 的对比表，加上 logprob 诊断的区间表 |
 | `HINDSIGHT_NOTES.md` | verl 训练主循环里 hindsight 插入点的调研 |
 | `SMOKE_TEST.md` | 冒烟测试结果汇总（结果文件在 `smoke_results/`） |
 | `results*/` | 零样本评测结果（prompt v1–v4） |
 | `training_results/grpo_binary_seed0/` | 400 步 GRPO baseline 的指标、每步统计、验证集输出（不含 rollout 原文和 checkpoint） |
+| `training_results/grpo_hindsight_p1_seed0/` | A 组（hindsight，p=1）300 步，另有 `relabel_log/`（每条改写样本和 logprob 诊断） |
+| `training_results/grpo_validbonus_seed0/` | B 组（合法格式 +0.1）300 步 |
+| `training_results/three_arm_comparison.md` | 三组对比表 |
 
 完整 rollout 和全部 checkpoint 在 Aliyun OSS：`oss://ruoke-h200-export/countdown-grpo-20261122/`（us-west-1）。checkpoint 是 `tar` 后按 4GB 切分的，恢复方法：`cat global_step_N.tar.part_* | tar -xf -`，校验文件为 `checkpoints/checkpoint_parts.md5`。
 
@@ -75,7 +83,7 @@ python countdown_rollout_stats.py --run_dir /root/work/runs/grpo_binary_seed0
 |---|---|
 | GRPO，组内减均值、除标准差 | `algorithm.adv_estimator=grpo`，`algorithm.norm_adv_by_std_in_grpo=True`。全相同的组 advantage = 0/(0+1e-6) = 0 |
 | 每步 64 题 × 8 条 | `data.train_batch_size=64`，`actor_rollout_ref.rollout.n=8` |
-| 每个 batch 只更新一次 | `actor.ppo_mini_batch_size=64`（以题目数为单位，乘 n 后是 512，即整个 batch），`actor.ppo_epochs=1`。`ppo_micro_batch_size_per_gpu=32` 只是梯度累积的切分，不增加更新次数 |
+| 每个 batch 只更新一次 | `actor.ppo_mini_batch_size=64`（以题目数为单位，乘 n 后是 512，即整个 batch），`actor.ppo_epochs=1`。`ppo_micro_batch_size_per_gpu=16`（`log_prob_micro_batch_size_per_gpu` 也是 16，64 会在第 2 步 OOM）只是梯度累积的切分，不增加更新次数 |
 | 不加 KL、不要 critic、entropy 为 0 | `actor.use_kl_loss=False`，`algorithm.use_kl_in_reward=False`（因此不会创建 ref 模型），`actor.entropy_coeff=0`。GRPO 不创建 critic |
 | AdamW，学习率 1e-6 | `actor.optim.lr`。其余用 verl 默认值：AdamW，betas (0.9, 0.999)，weight_decay 0.01，学习率恒定、无 warmup，grad clip 1.0 |
 | bf16 全参数训练 | FSDP 默认 `fsdp_config.dtype=bfloat16`（前向和反向用 bf16 计算），`model_dtype=fp32`（主权重和优化器状态用 fp32）。没有用 LoRA |
@@ -103,3 +111,21 @@ python countdown_rollout_stats.py --run_dir /root/work/runs/grpo_binary_seed0
 - 所以 reward 只返回 0.0/1.0。止步步骤、最终结果值和组统计，由 `countdown_rollout_stats.py` 从 `rollouts/<step>.jsonl` 里的原文重新判分得到。
 - 每步耗时来自 verl 记录的指标：`timing_s/gen`（rollout，含异步 reward）、`timing_s/old_log_prob`、`timing_s/update_actor`、`timing_s/update_weights`、`timing_s/step`。
 - 验证成功率：`val-core/countdown_{3,4}/acc/mean@1`。总体成功率取两者的平均（两边题数相同）。
+
+## 三组对比（seed 0，完整表见 `training_results/three_arm_comparison.md`）
+
+验证集贪心成功率（512 题）：
+
+| step | baseline | A：hindsight p=1 | B：合法格式 +0.1 |
+|---|---|---|---|
+| 0 | 9.0% | 9.0% | 8.8% |
+| 50 | 20.9% | 16.8% | 14.1% |
+| 100 | 26.8% | 23.2% | 17.0% |
+| 150 | 34.0% | 28.7% | 16.0% |
+| 200 | 35.5% | 29.5% | 15.0% |
+| 250 | 38.9% | 31.4% | 18.2% |
+| 300 | 38.5% | 36.5% | 17.0% |
+
+- **A**：前 20 步每步改写约 15 组，之后模型开始"算式随便写、最后一行硬写成目标数"（全失败组里 target 阶段的失败从第 5 步的 67 条降到第 18 步的 0 条，arithmetic 阶段的失败升到第 30 步的 360 条），于是没有可改写的候选，第 21 步以后一次改写都没有。第 50 步熵 0.034（baseline 0.08），混合组 9.7%（baseline 28%）。推测原因：改写组里只有"算式对且等于新目标"的正样本和"不等于新目标"的负样本，没有"写了新目标但算式是假的"负样本，所以分不清"算出目标"和"抄目标"。
+- **B**：第 50 步左右格式合法率到 100%，熵 0.003，模型稳定输出"合法但不对"的式子拿 0.1，几乎所有组 reward 相同，学习停滞。
+- logprob 诊断（第 1–25 步）：改写后成功的样本在新 prompt 下的 log 概率之和比原 prompt 高 1.1 nats，改写后失败的样本低 14.8 nats。

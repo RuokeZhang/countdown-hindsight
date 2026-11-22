@@ -1,0 +1,7 @@
+{"step": 0, "val_greedy_success_all": 0.087890625, "val_greedy_success_3": 0.15625, "val_greedy_success_4": 0.01953125}
+{"step": 50, "val_greedy_success_all": 0.140625, "val_greedy_success_3": 0.25, "val_greedy_success_4": 0.03125}
+{"step": 100, "val_greedy_success_all": 0.169921875, "val_greedy_success_3": 0.3046875, "val_greedy_success_4": 0.03515625}
+{"step": 150, "val_greedy_success_all": 0.16015625, "val_greedy_success_3": 0.26953125, "val_greedy_success_4": 0.05078125}
+{"step": 200, "val_greedy_success_all": 0.150390625, "val_greedy_success_3": 0.25390625, "val_greedy_success_4": 0.046875}
+{"step": 250, "val_greedy_success_all": 0.181640625, "val_greedy_success_3": 0.31640625, "val_greedy_success_4": 0.046875}
+{"step": 300, "val_greedy_success_all": 0.169921875, "val_greedy_success_3": 0.28515625, "val_greedy_success_4": 0.0546875}
