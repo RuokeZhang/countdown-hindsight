@@ -1,0 +1,105 @@
+# Countdown：零样本评测 + GRPO baseline（binary reward）
+
+## 文件
+
+| 文件 | 作用 |
+|---|---|
+| `countdown_grader.py` | 判分器（parse → arithmetic → usage → target），零样本评测和训练共用 |
+| `test_countdown_grader.py` | 判分器单测：`python3 -m unittest test_countdown_grader -v` |
+| `run_countdown_baseline.py` | 零样本评测（vLLM），以及 prompt v1–v4 的定义（`build_prompt`） |
+| `prepare_countdown_data.py` | 生成 verl 用的 train/val parquet（prompt v3） |
+| `countdown_reward.py` | verl 自定义 reward：四步全过记 1.0，否则 0.0 |
+| `train_countdown_grpo.sh` | GRPO 训练启动脚本（seed 和学习率可传参） |
+| `countdown_rollout_stats.py` | 离线统计：每步 reward、组统计、格式合法率、止步分布、耗时、验证成功率 |
+| `HINDSIGHT_NOTES.md` | verl 训练主循环里 hindsight 插入点的调研 |
+| `SMOKE_TEST.md` | 冒烟测试结果汇总（结果文件在 `smoke_results/`） |
+| `results*/` | 零样本评测结果（prompt v1–v4） |
+| `training_results/grpo_binary_seed0/` | 400 步 GRPO baseline 的指标、每步统计、验证集输出（不含 rollout 原文和 checkpoint） |
+
+完整 rollout 和全部 checkpoint 在 Aliyun OSS：`oss://ruoke-h200-export/countdown-grpo-20261122/`（us-west-1）。checkpoint 是 `tar` 后按 4GB 切分的，恢复方法：`cat global_step_N.tar.part_* | tar -xf -`，校验文件为 `checkpoints/checkpoint_parts.md5`。
+
+## 环境（单卡 L40S 48GB，Ubuntu 22.04，驱动支持 CUDA 13）
+
+verl **0.9.1**（GitHub tag `v0.9.1`），按仓库自带的 `uv.lock` 安装：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=$HOME/.local/bin:$PATH
+mkdir -p /root/work && cd /root/work
+git clone --branch v0.9.1 --depth 1 https://github.com/volcengine/verl.git && cd verl
+uv python install 3.12
+UV_PYTHON=3.12 uv sync --frozen --extra fsdp --extra vllm --no-install-package flash-attn
+uv pip install --python .venv/bin/python datasets pandas pyarrow
+```
+
+装出来的版本：vllm 0.24.0、torch 2.11.0+cu130、transformers 5.9.0。
+
+**为什么不装 flash-attn**：`uv.lock` 引用的 flash-attn 2.8.3（torch 2.11）轮子已经从 verl-wheelhouse 删除（404），wheelhouse 现在只剩 torch 2.13 / cu132 的构建。所以：
+- 训练端注意力改用 PyTorch SDPA（`+actor_rollout_ref.model.override_config.attn_implementation=sdpa`），并设置 `use_remove_padding=False`。
+- verl 的 padding 工具在没有 flash-attn 时会自动退回 torch 实现（`utils/attention_utils.py:71`）。
+- vLLM 用的是它自带的 flash-attn，rollout 不受影响。
+
+代码放在 `/root/work/countdown/`。下面的命令都在这个目录下、用 `/root/work/verl/.venv/bin/python` 执行。
+
+## 运行
+
+```bash
+# 1. 数据（seed 0；输出到 /root/work/data/countdown_v3/{train,val}.parquet）
+python prepare_countdown_data.py --out_dir /root/work/data/countdown_v3
+
+# 2. 训练（默认 400 步、每 50 步验证和存 checkpoint；用同一个 run_name 重跑会自动从最新 checkpoint 续训）
+bash train_countdown_grpo.sh --seed 0 --lr 1e-6 --run_name grpo_binary_seed0
+
+# 3. 离线统计（每步统计和验证成功率，写到 run 目录下的 step_stats.jsonl / validation_stats.jsonl）
+python countdown_rollout_stats.py --run_dir /root/work/runs/grpo_binary_seed0
+```
+
+每个 run 目录（`/root/work/runs/<run_name>/`）里有：
+- `metrics_<时间戳>.jsonl`：verl 的 file logger 输出，每启动一次新建一个文件，因为它用 `wb` 打开、会覆盖旧文件。
+- `rollouts/<step>.jsonl`：每步 512 条 rollout 原文。
+- `validation/`：验证集输出。
+- `checkpoints/`：checkpoint。
+- `train.log`：训练日志。
+
+## 数据切分
+
+- 按数字 multiset 去重：490,364 条原始数据去重后剩 358,636 个组合，每个组合保留第一次出现的那道题。
+- 验证集：3 个数和 4 个数各 256 道，从**不在**零样本 512 题里的组合中抽取。
+- 训练集：剩下的组合里 3 个数和 4 个数各取 118,377 道（数量取两者中较小的），再打乱。
+- train 和 val 的组合不重叠，脚本里有 assert 检查。零样本那 512 题里有 389 个组合落在训练集里。
+- `data_source` 设为 `countdown_3` / `countdown_4`，因此 verl 会自动按数字个数分开报告验证指标。
+- `extra_info` 包含 `problem_id`（原数据集行号）、`nums`、`target`、`num_count`、`split`。
+
+## 训练配置和 verl 实际键名
+
+| 意图 | 用到的配置键 / 说明 |
+|---|---|
+| GRPO，组内减均值、除标准差 | `algorithm.adv_estimator=grpo`，`algorithm.norm_adv_by_std_in_grpo=True`。全相同的组 advantage = 0/(0+1e-6) = 0 |
+| 每步 64 题 × 8 条 | `data.train_batch_size=64`，`actor_rollout_ref.rollout.n=8` |
+| 每个 batch 只更新一次 | `actor.ppo_mini_batch_size=64`（以题目数为单位，乘 n 后是 512，即整个 batch），`actor.ppo_epochs=1`。`ppo_micro_batch_size_per_gpu=32` 只是梯度累积的切分，不增加更新次数 |
+| 不加 KL、不要 critic、entropy 为 0 | `actor.use_kl_loss=False`，`algorithm.use_kl_in_reward=False`（因此不会创建 ref 模型），`actor.entropy_coeff=0`。GRPO 不创建 critic |
+| AdamW，学习率 1e-6 | `actor.optim.lr`。其余用 verl 默认值：AdamW，betas (0.9, 0.999)，weight_decay 0.01，学习率恒定、无 warmup，grad clip 1.0 |
+| bf16 全参数训练 | FSDP 默认 `fsdp_config.dtype=bfloat16`（前向和反向用 bf16 计算），`model_dtype=fp32`（主权重和优化器状态用 fp32）。没有用 LoRA |
+| 采样 | `rollout.temperature=1.0`，`rollout.top_p=1.0`，`data.max_response_length=64` |
+| prompt 长度 | v3 prompt 实测 157–178 token，所以设 `data.max_prompt_length=256` |
+| 每 50 步用贪心解码验证 | `trainer.test_freq=50`，`rollout.val_kwargs.{do_sample=False, temperature=0, n=1}`，`trainer.val_before_train=True` |
+| 每 50 步存 checkpoint，可续训 | `trainer.save_freq=50`，`trainer.resume_mode=auto`，`trainer.default_local_dir=<run>/checkpoints`。全部保留，每个约 18GB |
+| vLLM 和训练共用一张卡 | `rollout.gpu_memory_utilization=0.3`，`rollout.tensor_model_parallel_size=1`。训练阶段 vLLM 会 sleep，释放 KV cache |
+| 本地日志 | `trainer.logger=["console","file"]`，`VERL_FILE_LOGGER_PATH` |
+
+## 随机种子（`--seed`）
+
+| 影响 | 由什么控制 | 启动脚本里的设置 |
+|---|---|---|
+| 数据顺序 | `data.seed`：训练 sampler 的 `torch.Generator().manual_seed`（`trainer/ppo/utils.py:157`） | `data.seed=$SEED` |
+| 采样 | `rollout.seed`：vLLM 引擎 seed（`vllm_async_server.py:343`）。没开 `rollout.full_determinism` 时没有逐请求的 seed，结果还取决于调度顺序，所以采样**不能逐条复现** | `rollout.seed=$SEED` |
+| 模型初始化 | 从预训练权重加载，没有随机初始化的部分（没有 critic，也没有新加的 head） | — |
+| 其他 | `actor.fsdp_config.seed` 只在 `full_determinism=True` 时生效；`actor.data_loader_seed` 只在 `actor.shuffle=True` 时生效（默认关闭） | 也设成 `$SEED`，保持一致 |
+
+## Reward 和日志
+
+- reward 通过 `reward.custom_reward_function.path/name` 接入。注意：顶层的 `custom_reward_function` 在 v1 的 `main_ppo` 里不生效。
+- verl 调用 reward 函数时传入 `(data_source, solution_str, ground_truth, extra_info)`，其中 `solution_str` 是去掉特殊 token 后的回复文本。
+- reward 函数可以返回 dict（`score` 加额外字段），但 v1 训练路径**不会**把额外字段写进训练指标或 rollout 落盘，只会出现在验证指标和验证落盘里。验证还会对每个额外字段求均值，字符串字段会出错。
+- 所以 reward 只返回 0.0/1.0。止步步骤、最终结果值和组统计，由 `countdown_rollout_stats.py` 从 `rollouts/<step>.jsonl` 里的原文重新判分得到。
+- 每步耗时来自 verl 记录的指标：`timing_s/gen`（rollout，含异步 reward）、`timing_s/old_log_prob`、`timing_s/update_actor`、`timing_s/update_weights`、`timing_s/step`。
+- 验证成功率：`val-core/countdown_{3,4}/acc/mean@1`。总体成功率取两者的平均（两边题数相同）。
