@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from verl.trainer.ppo.core_algos import compute_grpo_outcome_advantage
 
-from countdown_grader import grade_countdown
+from countdown_grader import LINE_PATTERN, grade_countdown
 
 STOP_STAGES = ["parse", "arithmetic", "usage", "target"]
 PROMPT_PATTERN = re.compile(r"Using the numbers \[([^\]]*)\], reach the target (\d+)\.")
@@ -20,20 +20,49 @@ def load_problem_ids(train_parquet):
     return {tuple(sorted(int(n) for n in info["nums"])): int(info["problem_id"]) for info in train_frame["extra_info"]}
 
 
-def grade_step(rollout_rows, problem_id_by_multiset):
+def training_reward_from_grade(grade, reward_type):
+    if grade["success"]:
+        return 1.0
+    if reward_type == "validbonus" and grade["stopped_at"] == "target":
+        return 0.1
+    return 0.0
+
+
+def has_too_many_lines(output, num_count):
+    lines = [line.strip() for line in output.strip().split("\n")]
+    return len(lines) > num_count - 1 and all(LINE_PATTERN.match(line) for line in lines)
+
+
+def load_original_targets(run_dir, step):
+    """uid -> original target for groups the hindsight sampler relabeled at this step (empty for other runs)."""
+    relabel_path = os.path.join(run_dir, "relabel_log", f"{step}.jsonl")
+    if not os.path.exists(relabel_path):
+        return {}
+    return {row["uid"]: int(row["original_target"]) for row in map(json.loads, open(relabel_path))}
+
+
+def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type):
     records = []
     for row in rollout_rows:
         nums_text, target_text = PROMPT_PATTERN.search(row["input"]).groups()
         nums = [int(n) for n in nums_text.split(",")]
-        grade = grade_countdown(row["output"], nums, int(target_text))
+        group_id = row["uid"].split("_")[0]
+        training_target = int(target_text)
+        original_target = original_target_by_uid.get(group_id, training_target)
+        grade = grade_countdown(row["output"], nums, original_target)
+        training_grade = grade if original_target == training_target else grade_countdown(row["output"], nums, training_target)
         records.append({
             **grade,
-            "group_id": row["uid"].split("_")[0],
+            "group_id": group_id,
             "problem_id": problem_id_by_multiset.get(tuple(sorted(nums))),
             "nums": nums,
-            "target": int(target_text),
+            "target": original_target,
+            "training_target": training_target,
+            "relabeled": group_id in original_target_by_uid,
             "output": row["output"],
             "score": float(row["score"]),
+            "expected_training_reward": training_reward_from_grade(training_grade, reward_type),
+            "too_many_lines": grade["stopped_at"] == "parse" and has_too_many_lines(row["output"], len(nums)),
         })
     group_ids = sorted({r["group_id"] for r in records})
     group_index = {group_id: i for i, group_id in enumerate(group_ids)}
@@ -50,25 +79,31 @@ def grade_step(rollout_rows, problem_id_by_multiset):
 
 
 def summarize_step(records):
-    scores_by_group = defaultdict(list)
+    """Success-based metrics use the original target; reward/advantage checks use the actual training score."""
+    success_by_group = defaultdict(list)
+    training_scores_by_group = defaultdict(list)
     for record in records:
-        scores_by_group[record["group_id"]].append(record["score"])
-    failed = [r for r in records if r["score"] == 0.0]
-    all_fail_groups = [g for g, s in scores_by_group.items() if max(s) == 0.0]
-    all_fail_advantages = [r["advantage"] for r in records if r["group_id"] in set(all_fail_groups)]
+        success_by_group[record["group_id"]].append(float(record["success"]))
+        training_scores_by_group[record["group_id"]].append(record["score"])
+    failed = [r for r in records if not r["success"]]
+    zero_score_groups = {g for g, s in training_scores_by_group.items() if max(s) == 0.0}
+    zero_score_advantages = [r["advantage"] for r in records if r["group_id"] in zero_score_groups]
     return {
         "num_samples": len(records),
-        "num_groups": len(scores_by_group),
-        "mean_reward": sum(r["score"] for r in records) / len(records),
-        "reward_values": sorted({r["score"] for r in records}),
-        "regraded_matches_reward": all(float(r["success"]) == r["score"] for r in records),
-        "all_fail_group_rate": len(all_fail_groups) / len(scores_by_group),
-        "mixed_group_rate": sum(0.0 < sum(s) < len(s) for s in scores_by_group.values()) / len(scores_by_group),
-        "all_success_group_rate": sum(min(s) == 1.0 for s in scores_by_group.values()) / len(scores_by_group),
+        "num_groups": len(success_by_group),
+        "mean_reward": sum(r["success"] for r in records) / len(records),
+        "mean_training_reward": sum(r["score"] for r in records) / len(records),
+        "reward_values": sorted({round(r["score"], 6) for r in records}),
+        "regraded_matches_reward": all(abs(r["expected_training_reward"] - r["score"]) < 1e-6 for r in records),
+        "all_fail_group_rate": sum(max(s) == 0.0 for s in success_by_group.values()) / len(success_by_group),
+        "mixed_group_rate": sum(0.0 < sum(s) < len(s) for s in success_by_group.values()) / len(success_by_group),
+        "all_success_group_rate": sum(min(s) == 1.0 for s in success_by_group.values()) / len(success_by_group),
         "parse_ok_rate": sum(r["stopped_at"] != "parse" for r in records) / len(records),
         **{f"fail_stop_{stage}": sum(r["stopped_at"] == stage for r in failed) / max(len(failed), 1) for stage in STOP_STAGES},
+        "parse_fail_too_many_lines": sum(r["too_many_lines"] for r in records),
         "relabelable_rate_of_failed": sum(r["relabelable"] for r in failed) / max(len(failed), 1),
-        "max_abs_advantage_in_all_fail_groups": max((abs(a) for a in all_fail_advantages), default=0.0),
+        "relabeled_groups": len({r["group_id"] for r in records if r["relabeled"]}),
+        "max_abs_advantage_in_all_fail_groups": max((abs(a) for a in zero_score_advantages), default=0.0),
         "offline_advantage_max": max(r["advantage"] for r in records),
         "offline_advantage_min": min(r["advantage"] for r in records),
     }
@@ -87,6 +122,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_dir", required=True)
     parser.add_argument("--train_parquet", default="/root/work/data/countdown_v3/train.parquet")
+    parser.add_argument("--reward_type", choices=["binary", "validbonus"], default="binary")
     args = parser.parse_args()
 
     problem_id_by_multiset = load_problem_ids(args.train_parquet)
@@ -97,7 +133,7 @@ def main():
     step_summaries = []
     for path in rollout_paths:
         step = int(os.path.basename(path).split(".")[0])
-        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset)
+        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset, load_original_targets(args.run_dir, step), args.reward_type)
         logged = logged_by_step.get(step, {})
         summary = {
             "step": step,
@@ -114,6 +150,8 @@ def main():
             "timing_update_actor_s": logged.get("timing_s/update_actor"),
             "timing_update_weights_s": logged.get("timing_s/update_weights"),
             "timing_step_s": logged.get("timing_s/step"),
+            "timing_logprob_diagnostic_s": logged.get("hindsight/diagnostic_seconds"),
+            **{key: value for key, value in logged.items() if key.startswith("hindsight/")},
             "problem_ids": sorted({r["problem_id"] for r in records}),
         }
         step_summaries.append(summary)
