@@ -38,7 +38,9 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
     relabel_mode "group" (arms A/C) rewrites a whole all-failed group to one new target. relabel_mode "per_sample" (arm D)
     gives each relabel candidate its own value as target (reward 1), keeps parse/arithmetic/usage failures on their
     original prompt (reward 0), and moves both into one new uid per step so GRPO normalizes them together; the other
-    responses stay in their original all-zero group (advantage 0).
+    responses stay in their original all-zero group (advantage 0). relabel_mode "per_sample_split" (arm E) is per_sample
+    except that each candidate is relabeled (reward 1) or kept on its original prompt as a negative (reward 0) with
+    probability 0.5 each.
 
     With logprob_diagnostic, the trainer instance's _compute_old_log_prob is wrapped (the trainer is reached through
     refill_fn, a bound method of it). After verl computes old_log_probs for the whole batch, the wrapper runs one extra
@@ -62,7 +64,7 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             processor=None,
         )
         self.relabel_mode = self.sampler_kwargs.get("relabel_mode", "group")
-        if self.relabel_mode not in ("group", "per_sample"):
+        if self.relabel_mode not in ("group", "per_sample", "per_sample_split"):
             raise ValueError(f"unknown relabel_mode {self.relabel_mode}")
         self.logprob_diagnostic = bool(self.sampler_kwargs.get("logprob_diagnostic", False))
         self.advantage_log = bool(self.sampler_kwargs.get("advantage_log", False))
@@ -296,7 +298,10 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             nums = [int(n) for n in extra_info["nums"]]
             original_target = int(extra_info["target"])
             random_seed_text = f"{self.seed}:{global_steps}:{int(extra_info['problem_id'])}"
-            decision = relabel_responses_individually([response_texts[i] for i in indices], nums, original_target, self.relabel_probability, random_seed_text)
+            decision = relabel_responses_individually(
+                [response_texts[i] for i in indices], nums, original_target, self.relabel_probability, random_seed_text,
+                split_candidates=self.relabel_mode == "per_sample_split",
+            )
             if not decision["selected"]:
                 continue
             log_rows.append({
@@ -307,6 +312,7 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
                 "original_target": original_target,
                 "responses": [response_texts[i] for i in indices],
                 "original_rewards": [scores[i] for i in indices],
+                "relabel_mode": self.relabel_mode,
                 "classes": decision["classes"],
                 "new_targets": decision["new_targets"],
                 "new_rewards": decision["new_rewards"],
@@ -339,6 +345,9 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             "hindsight/untouched_samples_in_selected_groups": sum(cls == "untouched" for row in log_rows for cls in row["classes"]),
             "hindsight/selected_groups_with_positive": sum("positive" in row["classes"] for row in log_rows),
         }
+        if self.relabel_mode == "per_sample_split":
+            for cls in ("positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage"):
+                metrics[f"hindsight/pooled_{cls}_samples"] = sum(c == cls for _, c, _, _ in pooled) if pool_built else 0
         return plan, log_rows, metrics
 
     def _write_relabel_log(self, global_steps, log_rows):

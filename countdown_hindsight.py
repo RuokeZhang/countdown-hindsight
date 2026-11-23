@@ -4,6 +4,7 @@ from countdown_grader import grade_countdown
 
 TARGET_MIN = 10
 TARGET_MAX = 100
+SPLIT_POSITIVE_PROBABILITY = 0.5
 
 
 def relabel_group(responses, nums, original_target, relabel_probability, random_seed_text):
@@ -33,13 +34,17 @@ def relabel_group(responses, nums, original_target, relabel_probability, random_
     return result
 
 
-def relabel_responses_individually(responses, nums, original_target, relabel_probability, random_seed_text):
+def relabel_responses_individually(responses, nums, original_target, relabel_probability, random_seed_text, split_candidates=False):
     """Per-sample hindsight for one all-failed group; the group enters with probability relabel_probability.
 
     Inside an entered group every response gets a class:
     - "positive": a relabel candidate (same condition as relabel_group); its own final value becomes its new target, reward 1.
     - "negative": stopped at parse/arithmetic/usage; prompt unchanged, reward 0.
     - "untouched": everything else (valid arithmetic whose value is not a candidate); left in the original group.
+
+    With split_candidates (arm E) each candidate is a positive with probability SPLIT_POSITIVE_PROBABILITY and otherwise a
+    "negative_valid" (original prompt, reward 0), decided by its own seed text "<random_seed_text>:<position in group>";
+    invalid responses are then labeled by stage: "negative_parse", "negative_arithmetic", "negative_usage".
     """
     rng = random.Random(random_seed_text)
     result = {"selected": rng.random() < relabel_probability, "classes": None, "new_targets": None, "new_rewards": None}
@@ -47,14 +52,19 @@ def relabel_responses_individually(responses, nums, original_target, relabel_pro
         return result
 
     classes, new_targets, new_rewards = [], [], []
-    for response in responses:
+    for position, response in enumerate(responses):
         grade = grade_countdown(response, nums, original_target)
-        if grade["relabelable"] and TARGET_MIN <= grade["final_value"] <= TARGET_MAX:
+        is_candidate = grade["relabelable"] and TARGET_MIN <= grade["final_value"] <= TARGET_MAX
+        if is_candidate and split_candidates and random.Random(f"{random_seed_text}:{position}").random() >= SPLIT_POSITIVE_PROBABILITY:
+            classes.append("negative_valid")
+            new_targets.append(None)
+            new_rewards.append(0.0)
+        elif is_candidate:
             classes.append("positive")
             new_targets.append(grade["final_value"])
             new_rewards.append(1.0 if grade_countdown(response, nums, grade["final_value"])["success"] else 0.0)
         elif grade["stopped_at"] in ("parse", "arithmetic", "usage"):
-            classes.append("negative")
+            classes.append(f"negative_{grade['stopped_at']}" if split_candidates else "negative")
             new_targets.append(None)
             new_rewards.append(0.0)
         else:

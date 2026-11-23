@@ -55,6 +55,15 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
             sampler_kwargs={"seed": 0, "relabel_probability": 1.0, "relabel_log_dir": cls.per_sample_log_dir, "model_path": MODEL_PATH, "relabel_mode": "per_sample"},
             refill_fn=None,
         )
+        cls.split_log_dir = tempfile.mkdtemp()
+        cls.split_sampler = HindsightRelabelReplayBuffer(
+            trainer_mode="sync",
+            trainer_config={},
+            max_off_policy_threshold=None,
+            max_off_policy_strategy="drop",
+            sampler_kwargs={"seed": 0, "relabel_probability": 1.0, "relabel_log_dir": cls.split_log_dir, "model_path": MODEL_PATH, "relabel_mode": "per_sample_split"},
+            refill_fn=None,
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -148,7 +157,7 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
         keys, samples, tags = [], [], []
         for uid, responses in groups.items():
             for session_id, response_text in enumerate(responses):
-                score = 1.0 if (uid == "psmixed" and session_id == 0) else 0.0
+                score = 1.0 if (uid in ("psmixed", "spmixed") and session_id == 0) else 0.0
                 sample, tag = self._make_sample(uid, session_id, response_text, score)
                 keys.append(f"{uid}_{session_id}_0")
                 samples.append(sample)
@@ -226,9 +235,49 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
             self.assertEqual(stored[index]["uid"], "psonlybad")
             self.assertTrue(torch.equal(stored[index]["input_ids"], samples[index]["input_ids"]))
 
+    def test_per_sample_split_relabel(self):
+        keys, samples, tags = self._put_groups({"sprelabel": GROUPS["relabelme"], "spmixed": GROUPS["mixed"]})
+        relabeled_batch, metrics = self.split_sampler._relabel_batch(KVBatchMeta(partition_id="train", keys=keys, tags=tags), global_steps=6)
+        row = json.loads(open(os.path.join(self.split_log_dir, "6.jsonl")).readline())
+        candidates = {0: 28, 1: 60, 3: 60, 7: 28}
+        fixed = {2: "negative_parse", 4: "negative_arithmetic", 5: "negative_parse", 6: "untouched"}
+        for position, cls in fixed.items():
+            self.assertEqual(row["classes"][position], cls)
+        for position in candidates:
+            self.assertIn(row["classes"][position], ("positive", "negative_valid"))
+        counts = {cls: row["classes"].count(cls) for cls in ("positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage")}
+        for cls, count in counts.items():
+            self.assertEqual(metrics[f"hindsight/pooled_{cls}_samples"], count if metrics["hindsight/pool_built"] else 0)
+
+        stored = tq.kv_batch_get(keys=keys, partition_id="train")
+        pool_uids = set()
+        for index, key in enumerate(keys):
+            stored_row, original = stored[index], samples[index]
+            group, position = key.split("_")[0], int(key.split("_")[1])
+            if group == "spmixed":
+                for field_name in ("prompts", "input_ids", "position_ids", "rm_scores"):
+                    self.assertTrue(torch.equal(stored_row[field_name], original[field_name]), field_name)
+                self.assertEqual(stored_row["uid"], "spmixed")
+                continue
+            cls = row["classes"][position]
+            if cls == "untouched":
+                self.assertEqual(stored_row["uid"], group)
+                continue
+            if not metrics["hindsight/pool_built"]:
+                continue
+            pool_uids.add(stored_row["uid"])
+            if cls == "positive":
+                self.assertEqual(stored_row["extra_info"]["target"], candidates[position])
+                self.assertEqual(float(stored_row["rm_scores"].sum()), 1.0)
+            else:
+                self.assertTrue(torch.equal(stored_row["input_ids"], original["input_ids"]))
+                self.assertEqual(stored_row["extra_info"]["target"], TARGET)
+                self.assertEqual(float(stored_row["rm_scores"].sum()), 0.0)
+        self.assertLessEqual(len(pool_uids), 1)
+
     def test_validation_batch_is_not_relabeled(self):
         val_batch = KVBatchMeta(partition_id="val", keys=["v_0_0"], tags=[{}])
-        for sampler in (self.sampler, self.per_sample_sampler):
+        for sampler in (self.sampler, self.per_sample_sampler, self.split_sampler):
             with mock.patch.object(ReplayBuffer, "sample", return_value=(val_batch, {})), mock.patch.object(sampler, "_relabel_batch", side_effect=AssertionError("val relabeled")):
                 batch, metrics = sampler.sample(global_steps=5, partition_id="val", batch_size=1)
             self.assertIs(batch, val_batch)

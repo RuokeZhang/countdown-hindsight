@@ -1,2 +1,3 @@
 {"step": 0, "val_greedy_success_all": 0.095703125, "val_greedy_success_3": 0.16796875, "val_greedy_success_4": 0.0234375, "val_failed": 463, "val_fail_claims_target_rate": 0.31965442764578833}
 {"step": 50, "val_greedy_success_all": 0.17578125, "val_greedy_success_3": 0.3125, "val_greedy_success_4": 0.0390625, "val_failed": 422, "val_fail_claims_target_rate": 0.002369668246445498}
+{"step": 100, "val_greedy_success_all": 0.27734375, "val_greedy_success_3": 0.453125, "val_greedy_success_4": 0.1015625, "val_failed": 370, "val_fail_claims_target_rate": 0.002702702702702703}

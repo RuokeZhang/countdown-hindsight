@@ -70,11 +70,27 @@ def hindsight_sample_counts(relabel_rows):
     for row in relabeled_rows(relabel_rows):
         if "classes" in row:
             positives += row["classes"].count("positive")
-            negatives += row["classes"].count("negative")
+            negatives += sum(cls.startswith("negative") for cls in row["classes"])
         else:
             positives += int(sum(row["new_rewards"]))
             negatives += len(row["new_rewards"]) - int(sum(row["new_rewards"]))
     return positives, negatives
+
+
+def is_split_run(run_dir):
+    """The per-sample-split sampler logs hindsight/pooled_negative_valid_samples in summary.jsonl on every step."""
+    summary_path = os.path.join(run_dir, "relabel_log", "summary.jsonl")
+    return os.path.exists(summary_path) and any("hindsight/pooled_negative_valid_samples" in json.loads(line) for line in open(summary_path))
+
+
+def hindsight_class_counts(relabel_rows):
+    """Per-class pooled sample counts of one step of a per-sample-split run (0 for classes or steps without a pool)."""
+    counts = {f"hindsight_{cls}_samples": 0 for cls in ("positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage")}
+    for row in relabeled_rows(relabel_rows):
+        for cls in row["classes"]:
+            if cls != "untouched":
+                counts[f"hindsight_{cls}_samples"] += 1
+    return counts
 
 
 def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type, training_uid_by_key=None):
@@ -180,6 +196,7 @@ def main():
     args = parser.parse_args()
 
     problem_id_by_multiset = load_problem_ids(args.train_parquet)
+    split_run = is_split_run(args.run_dir)
     logged_by_step = load_logged_metrics(args.run_dir)
     rollout_paths = [p for p in glob.glob(os.path.join(args.run_dir, "rollouts", "*.jsonl")) if re.fullmatch(r"\d+\.jsonl", os.path.basename(p))]
     rollout_paths.sort(key=lambda p: int(os.path.basename(p).split(".")[0]))
@@ -196,6 +213,7 @@ def main():
             **summarize_step(records),
             "hindsight_positive_samples": hindsight_positives,
             "hindsight_negative_samples": hindsight_negatives,
+            **(hindsight_class_counts(relabel_rows) if split_run else {}),
             "logged_advantage_max": logged.get("critic/advantages/max"),
             "logged_advantage_min": logged.get("critic/advantages/min"),
             "logged_score_mean": logged.get("critic/score/mean"),

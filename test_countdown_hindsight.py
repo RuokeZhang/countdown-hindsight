@@ -98,5 +98,49 @@ class TestRelabelResponsesIndividually(unittest.TestCase):
         self.assertTrue(400 < selected < 600, selected)
 
 
+class TestRelabelResponsesSplit(unittest.TestCase):
+    RESPONSES = TestRelabelResponsesIndividually.RESPONSES
+
+    def test_split_classes_and_rewards(self):
+        result = relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 1.0, "0:1:7", split_candidates=True)
+        self.assertTrue(result["selected"])
+        # Responses 0, 1, 7 are candidates; the rest are fixed by their stage.
+        for position in (2,):
+            self.assertEqual(result["classes"][position], "negative_parse")
+        self.assertEqual(result["classes"][3], "negative_arithmetic")
+        self.assertEqual(result["classes"][4], "negative_usage")
+        self.assertEqual(result["classes"][5], "untouched")
+        self.assertEqual(result["classes"][6], "negative_usage")
+        own_values = {0: 28, 1: 60, 7: 28}
+        for position, value in own_values.items():
+            self.assertIn(result["classes"][position], ("positive", "negative_valid"))
+            if result["classes"][position] == "positive":
+                self.assertEqual((result["new_targets"][position], result["new_rewards"][position]), (value, 1.0))
+            else:
+                self.assertEqual((result["new_targets"][position], result["new_rewards"][position]), (None, 0.0))
+        for position in (2, 3, 4, 6):
+            self.assertEqual((result["new_targets"][position], result["new_rewards"][position]), (None, 0.0))
+        self.assertEqual((result["new_targets"][5], result["new_rewards"][5]), (None, None))
+
+    def test_split_is_reproducible_and_depends_on_seed(self):
+        first = relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 1.0, "0:1:7", split_candidates=True)
+        second = relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 1.0, "0:1:7", split_candidates=True)
+        self.assertEqual(first, second)
+        patterns = {tuple(relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 1.0, f"0:{step}:7", split_candidates=True)["classes"]) for step in range(40)}
+        self.assertGreater(len(patterns), 1)
+
+    def test_split_probability_is_about_half(self):
+        candidate = ["44 + 19 = 63\n63 - 35 = 28"] * 8
+        positives = sum(relabel_responses_individually(candidate, NUMS, TARGET, 1.0, f"0:{step}:7", split_candidates=True)["classes"].count("positive") for step in range(500))
+        self.assertTrue(1800 < positives < 2200, positives)
+
+    def test_group_selection_matches_unsplit_mode(self):
+        for step in range(200):
+            seed_text = f"0:{step}:7"
+            split = relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 0.25, seed_text, split_candidates=True)
+            unsplit = relabel_responses_individually(self.RESPONSES, NUMS, TARGET, 0.25, seed_text)
+            self.assertEqual(split["selected"], unsplit["selected"])
+
+
 if __name__ == "__main__":
     unittest.main()

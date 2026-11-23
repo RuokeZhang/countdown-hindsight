@@ -18,7 +18,7 @@ def load_jsonl_by_step(path):
 def window_mean(step_stats, center_step, key):
     """Mean of key over training steps center-4 .. center+5 (steps 1..10 for center 0)."""
     first_step = 1 if center_step == 0 else center_step - WINDOW_HALF_WIDTH + 1
-    window = [step_stats[s][key] for s in range(first_step, first_step + 2 * WINDOW_HALF_WIDTH) if s in step_stats]
+    window = [step_stats[s][key] for s in range(first_step, first_step + 2 * WINDOW_HALF_WIDTH) if s in step_stats and step_stats[s].get(key) is not None]
     return sum(window) / len(window) if window else None
 
 
@@ -80,6 +80,22 @@ def main():
                 f"{format_percent(window_mean(step_stats, step, 'fail_claims_target_rate'))} | {format_percent(validation.get(step, {}).get('val_fail_claims_target_rate'))} | "
                 f"{format_number(window_mean(step_stats, step, 'hindsight_positive_samples'))} | {format_number(window_mean(step_stats, step, 'hindsight_negative_samples'))} |"
             )
+    split_classes = ["positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage"]
+    split_runs = [name for name, _ in runs if any("hindsight_negative_valid_samples" in row for row in loaded[name][1].values())]
+    if split_runs:
+        lines += [
+            "",
+            "## Per-sample-split runs: pooled samples per step by class",
+            "",
+            "Window means as above. negative_valid = valid relabel candidate kept on its original prompt with reward 0.",
+            "",
+            "| step | run | " + " | ".join(split_classes) + " |",
+            "|---|---|" + "---|" * len(split_classes),
+        ]
+        for step in DEGENERATION_STEPS:
+            for name in split_runs:
+                step_stats = loaded[name][1]
+                lines.append(f"| {step} | {name} | " + " | ".join(format_number(window_mean(step_stats, step, f"hindsight_{cls}_samples")) for cls in split_classes) + " |")
     for diagnostic_name, diagnostic_dir in (run.split("=", 1) for run in args.diagnostic_runs):
         step_stats = load_jsonl_by_step(os.path.join(diagnostic_dir, "step_stats.jsonl"))
         lines += [
