@@ -26,6 +26,7 @@
 | `training_results/three_arm_comparison.md` | 三组对比表 |
 | `training_results/grpo_hindsight_per_sample_p0.25_seed0/` | D 组（逐条改写：候选改成自己的值记 1，parse/arithmetic/usage 失败记 0，两者放进每步一个新 uid 统一归一化；p=0.25），跑到第 100 步停止；`relabel_log/advantages/` 是每条样本实际的 advantage |
 | `training_results/arm_comparison_baseline_A_B_C_D.md` | 五组对比表（C 到第 50 步，D 到第 100 步） |
+| `training_results/grpo_hindsight_per_sample_split_p0.25_seed0/` | E 组（在 D 的基础上，每条候选按 0.5 概率改写成正样本或留在原 prompt 记 0），训练中，目前是中期结果 |
 
 完整 rollout 和全部 checkpoint 在 Aliyun OSS：`oss://ruoke-h200-export/countdown-grpo-20261122/`（us-west-1）。checkpoint 是 `tar` 后按 4GB 切分的，恢复方法：`cat global_step_N.tar.part_* | tar -xf -`，校验文件为 `checkpoints/checkpoint_parts.md5`。
 
