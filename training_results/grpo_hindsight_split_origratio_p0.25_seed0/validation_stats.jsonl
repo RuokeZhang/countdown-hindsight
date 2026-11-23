@@ -1,1 +1,2 @@
 {"step": 0, "val_greedy_success_all": 0.09375, "val_greedy_success_3": 0.1640625, "val_greedy_success_4": 0.0234375, "val_failed": 464, "val_fail_claims_target_rate": 0.34051724137931033}
+{"step": 50, "val_greedy_success_all": 0.158203125, "val_greedy_success_3": 0.2734375, "val_greedy_success_4": 0.04296875, "val_failed": 431, "val_fail_claims_target_rate": 0.03480278422273782}

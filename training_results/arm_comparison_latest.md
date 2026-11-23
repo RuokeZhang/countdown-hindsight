@@ -19,7 +19,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 50 | D_per_sample_p0.25 | 17.6% | 31.2% | 3.9% | 99.5% | 0.8 | 14.4% |
 | 50 | E_split_p0.25 | 20.5% | 35.2% | 5.9% | 97.6% | 5.1 | 31.1% |
 | 50 | F_keep_prompt_p0.25 | 21.1% | 36.7% | 5.5% | 99.6% | 0.1 | 15.6% |
-| 50 | G_orig_ratio_p0.25 | — | — | — | 98.2% | 1.5 | 9.4% |
+| 50 | G_orig_ratio_p0.25 | 15.8% | 27.3% | 4.3% | 97.9% | 3.5 | 6.5% |
 | 100 | baseline | 26.8% | 44.5% | 9.0% | 69.6% | 109.4 | 13.6% |
 | 100 | A_group_p1 | 23.2% | 39.8% | 6.6% | 76.4% | 94.0 | 11.4% |
 | 100 | B_validbonus | 17.0% | 30.5% | 3.5% | 100.0% | 0.0 | 4.2% |
@@ -90,7 +90,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 50 | D_per_sample_p0.25 | 0.019 | 14.4% | 0.3% | 0.2% | 53.9 | 3.8 |
 | 50 | E_split_p0.25 | 0.058 | 31.1% | 2.3% | 2.0% | 22.9 | 30.7 |
 | 50 | F_keep_prompt_p0.25 | 0.024 | 15.6% | 0.5% | 0.2% | 30.1 | 30.1 |
-| 50 | G_orig_ratio_p0.25 | 0.018 | 9.4% | 4.4% | — | 21.0 | 33.0 |
+| 50 | G_orig_ratio_p0.25 | 0.015 | 6.5% | 2.9% | 3.5% | 29.5 | 37.3 |
 | 100 | baseline | 0.051 | 13.6% | 28.1% | 25.9% | 0.0 | 0.0 |
 | 100 | A_group_p1 | 0.028 | 11.4% | 94.8% | 94.4% | 0.0 | 0.0 |
 | 100 | B_validbonus | 0.006 | 4.2% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -184,7 +184,7 @@ Window means as above. negative_valid = valid relabel candidate kept on its orig
 | 25 | G_orig_ratio_p0.25 | 23.4 | 21.7 | 10.6 | 7.5 | 1.3 |
 | 50 | E_split_p0.25 | 22.9 | 22.7 | 2.6 | 3.7 | 1.7 |
 | 50 | F_keep_prompt_p0.25 | 30.1 | 28.4 | 0.4 | 0.7 | 0.6 |
-| 50 | G_orig_ratio_p0.25 | 21.0 | 21.5 | 2.5 | 9.0 | 0.0 |
+| 50 | G_orig_ratio_p0.25 | 29.5 | 28.5 | 1.2 | 7.5 | 0.2 |
 | 100 | E_split_p0.25 | 26.9 | 24.7 | 1.0 | 1.1 | 1.0 |
 | 100 | F_keep_prompt_p0.25 | 35.2 | 35.0 | 0.0 | 1.4 | 1.0 |
 | 100 | G_orig_ratio_p0.25 | — | — | — | — | — |
@@ -244,7 +244,7 @@ Per-step summaries averaged over the steps in each interval (steps with no relab
 | steps | diff mean (new-target success) | diff median (success) | diff mean (new-target fail) | diff median (fail) | share \|diff\| < 0.05 | success samples | fail samples |
 |---|---|---|---|---|---|---|---|
 | 1-25 | 0.075 | 0.127 | — | — | 10.6% | 290.0 | 0.0 |
-| 26-50 | -0.920 | -0.391 | — | — | 43.7% | 506.0 | 0.0 |
-| 51-100 | — | — | — | — | — | 0 | 0 |
+| 26-50 | -0.892 | -0.353 | — | — | 44.0% | 614.0 | 0.0 |
+| 51-100 | -2.576 | -0.011 | — | — | 33.3% | 27.0 | 0.0 |
 | 101-200 | — | — | — | — | — | 0 | 0 |
 | 201-300 | — | — | — | — | — | 0 | 0 |
