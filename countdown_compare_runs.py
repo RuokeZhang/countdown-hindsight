@@ -2,6 +2,9 @@ import argparse
 import json
 import math
 import os
+import re
+
+from countdown_grader import grade_countdown
 
 COMPARE_STEPS = [0, 50, 100, 150, 200, 250, 300]
 DEGENERATION_STEPS = [0, 25, 50, 100, 150, 200, 250, 300]
@@ -9,6 +12,8 @@ DIAGNOSTIC_INTERVALS = [(1, 25), (26, 50), (51, 100), (101, 200), (201, 300)]
 DIAGNOSTIC_MEANS = ["logp_diff_success_mean", "logp_diff_success_median", "logp_diff_fail_mean", "logp_diff_fail_median", "logp_abs_diff_small_rate"]
 DIAGNOSTIC_COUNTS = ["logp_diff_success_count", "logp_diff_fail_count"]
 WINDOW_HALF_WIDTH = 5
+PAIRED_STEPS = [100, 150, 200, 250, 300]
+PROMPT_PATTERN = re.compile(r"Using the numbers \[([^\]]*)\], reach the target (\d+)\.")
 
 
 def load_jsonl_by_step(path):
@@ -20,6 +25,18 @@ def window_mean(step_stats, center_step, key):
     first_step = 1 if center_step == 0 else center_step - WINDOW_HALF_WIDTH + 1
     window = [step_stats[s][key] for s in range(first_step, first_step + 2 * WINDOW_HALF_WIDTH) if s in step_stats and step_stats[s].get(key) is not None]
     return sum(window) / len(window) if window else None
+
+
+def validation_success_by_prompt(run_dir, step):
+    """prompt text -> greedy validation success at this step, or None if the run has no dump for the step."""
+    path = os.path.join(run_dir, "validation", f"{step}.jsonl")
+    if not os.path.exists(path):
+        return None
+    success_by_prompt = {}
+    for row in map(json.loads, open(path)):
+        nums_text, target_text = PROMPT_PATTERN.search(row["input"]).groups()
+        success_by_prompt[row["input"]] = grade_countdown(row["output"], [int(n) for n in nums_text.split(",")], int(target_text))["success"]
+    return success_by_prompt
 
 
 def format_percent(value):
@@ -39,6 +56,8 @@ def main():
     parser.add_argument("--runs", nargs="+", required=True, help="name=run_dir pairs")
     parser.add_argument("--out", required=True)
     parser.add_argument("--diagnostic_runs", nargs="*", default=[], help="name=run_dir pairs of hindsight runs for the log-prob table")
+    parser.add_argument("--seed_groups", nargs="*", default=[], help="arm=run_dir_seed0,run_dir_seed1,... for the multi-seed validation table")
+    parser.add_argument("--paired_groups", nargs=2, default=None, metavar=("ARM", "REFERENCE"), help="two --seed_groups arms compared problem by problem, seed by seed")
     args = parser.parse_args()
 
     runs = [run.split("=", 1) for run in args.runs]
@@ -80,6 +99,45 @@ def main():
                 f"{format_percent(window_mean(step_stats, step, 'fail_claims_target_rate'))} | {format_percent(validation.get(step, {}).get('val_fail_claims_target_rate'))} | "
                 f"{format_number(window_mean(step_stats, step, 'hindsight_positive_samples'))} | {format_number(window_mean(step_stats, step, 'hindsight_negative_samples'))} |"
             )
+    seed_groups = {name: dirs.split(",") for name, dirs in (group.split("=", 1) for group in args.seed_groups)}
+    if seed_groups:
+        lines += [
+            "",
+            "## Validation across seeds",
+            "",
+            "Mean over the seeds that have reached the step; per-seed values in seed order (— = not reached yet).",
+            "",
+            "| step | arm | seeds | mean all | mean 3 nums | mean 4 nums | per-seed all |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for step in COMPARE_STEPS:
+            for name, dirs in seed_groups.items():
+                rows = [load_jsonl_by_step(os.path.join(d, "validation_stats.jsonl")).get(step) if os.path.exists(os.path.join(d, "validation_stats.jsonl")) else None for d in dirs]
+                present = [row for row in rows if row]
+                means = [sum(row[key] for row in present) / len(present) if present else None for key in ("val_greedy_success_all", "val_greedy_success_3", "val_greedy_success_4")]
+                per_seed = ", ".join(format_percent(row["val_greedy_success_all"]) if row else "—" for row in rows)
+                lines.append(f"| {step} | {name} | {len(present)} | " + " | ".join(format_percent(m) for m in means) + f" | {per_seed} |")
+    if args.paired_groups:
+        arm, reference = args.paired_groups
+        lines += [
+            "",
+            f"## Problem-by-problem validation: {arm} vs {reference} (same seed)",
+            "",
+            f"Counts over the 512 validation problems. only {arm} = {arm} solves it and {reference} does not.",
+            "",
+            f"| step | seed | only {arm} | only {reference} | both | neither |",
+            "|---|---|---|---|---|---|",
+        ]
+        for step in PAIRED_STEPS:
+            for seed_index, (arm_dir, reference_dir) in enumerate(zip(seed_groups[arm], seed_groups[reference])):
+                arm_success, reference_success = validation_success_by_prompt(arm_dir, step), validation_success_by_prompt(reference_dir, step)
+                if arm_success is None or reference_success is None:
+                    continue
+                assert arm_success.keys() == reference_success.keys(), "validation sets differ"
+                only_arm = sum(arm_success[p] and not reference_success[p] for p in arm_success)
+                only_reference = sum(reference_success[p] and not arm_success[p] for p in arm_success)
+                both = sum(arm_success[p] and reference_success[p] for p in arm_success)
+                lines.append(f"| {step} | {seed_index} | {only_arm} | {only_reference} | {both} | {len(arm_success) - only_arm - only_reference - both} |")
     split_classes = ["positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage"]
     split_runs = [name for name, _ in runs if any("hindsight_negative_valid_samples" in row for row in loaded[name][1].values())]
     if split_runs:
