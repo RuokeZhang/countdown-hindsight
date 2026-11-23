@@ -1,0 +1,7 @@
+{"step": 0, "val_greedy_success_all": 0.08984375, "val_greedy_success_3": 0.1640625, "val_greedy_success_4": 0.015625, "val_failed": 466, "val_fail_claims_target_rate": 0.31759656652360513}
+{"step": 50, "val_greedy_success_all": 0.1875, "val_greedy_success_3": 0.328125, "val_greedy_success_4": 0.046875, "val_failed": 416, "val_fail_claims_target_rate": 0.6490384615384616}
+{"step": 100, "val_greedy_success_all": 0.3515625, "val_greedy_success_3": 0.5859375, "val_greedy_success_4": 0.1171875, "val_failed": 332, "val_fail_claims_target_rate": 0.8524096385542169}
+{"step": 150, "val_greedy_success_all": 0.408203125, "val_greedy_success_3": 0.6640625, "val_greedy_success_4": 0.15234375, "val_failed": 303, "val_fail_claims_target_rate": 0.636963696369637}
+{"step": 200, "val_greedy_success_all": 0.376953125, "val_greedy_success_3": 0.609375, "val_greedy_success_4": 0.14453125, "val_failed": 319, "val_fail_claims_target_rate": 0.4608150470219436}
+{"step": 250, "val_greedy_success_all": 0.453125, "val_greedy_success_3": 0.73828125, "val_greedy_success_4": 0.16796875, "val_failed": 280, "val_fail_claims_target_rate": 0.21428571428571427}
+{"step": 300, "val_greedy_success_all": 0.484375, "val_greedy_success_3": 0.76171875, "val_greedy_success_4": 0.20703125, "val_failed": 264, "val_fail_claims_target_rate": 0.17424242424242425}
