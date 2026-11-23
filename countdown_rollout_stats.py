@@ -244,10 +244,10 @@ def main():
 
     validation_rows = []
     for step, logged in sorted(logged_by_step.items()):
-        three = logged.get("val-core/countdown_3/acc/mean@1")
-        four = logged.get("val-core/countdown_4/acc/mean@1")
-        if three is not None and four is not None:
-            validation_rows.append({"step": step, "val_greedy_success_all": (three + four) / 2, "val_greedy_success_3": three, "val_greedy_success_4": four, **validation_claims_target(args.run_dir, step)})
+        success_by_size = {size: logged[f"val-core/countdown_{size}/acc/mean@1"] for size in (3, 4, 5) if f"val-core/countdown_{size}/acc/mean@1" in logged}
+        if success_by_size:
+            per_size = {f"val_greedy_success_{size}": success for size, success in success_by_size.items()}
+            validation_rows.append({"step": step, "val_greedy_success_all": sum(success_by_size.values()) / len(success_by_size), **per_size, **validation_claims_target(args.run_dir, step)})
 
     with open(os.path.join(args.run_dir, "step_stats.jsonl"), "w") as stats_file:
         for summary in step_summaries:

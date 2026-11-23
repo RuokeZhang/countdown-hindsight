@@ -13,6 +13,8 @@ DIAGNOSTIC_MEANS = ["logp_diff_success_mean", "logp_diff_success_median", "logp_
 DIAGNOSTIC_COUNTS = ["logp_diff_success_count", "logp_diff_fail_count"]
 WINDOW_HALF_WIDTH = 5
 PAIRED_STEPS = [100, 150, 200, 250, 300]
+MILESTONES = [0.05, 0.10, 0.20]
+EARLY_WINDOWS = [(1, 25), (26, 50), (51, 75), (76, 100)]
 PROMPT_PATTERN = re.compile(r"Using the numbers \[([^\]]*)\], reach the target (\d+)\.")
 
 
@@ -58,6 +60,9 @@ def main():
     parser.add_argument("--diagnostic_runs", nargs="*", default=[], help="name=run_dir pairs of hindsight runs for the log-prob table")
     parser.add_argument("--seed_groups", nargs="*", default=[], help="arm=run_dir_seed0,run_dir_seed1,... for the multi-seed validation table")
     parser.add_argument("--paired_groups", nargs=2, default=None, metavar=("ARM", "REFERENCE"), help="two --seed_groups arms compared problem by problem, seed by seed")
+    parser.add_argument("--compare_steps", type=int, nargs="+", default=COMPARE_STEPS, help="validation steps shown in the main and multi-seed tables")
+    parser.add_argument("--paired_steps", type=int, nargs="+", default=PAIRED_STEPS)
+    parser.add_argument("--milestones", action="store_true", help="add first-step-to-5/10/20%% validation and first-100-steps signal tables")
     args = parser.parse_args()
 
     runs = [run.split("=", 1) for run in args.runs]
@@ -71,7 +76,7 @@ def main():
         "| step | run | val all | val 3 nums | val 4 nums | train format valid | too-many-lines fails / step | mixed groups |",
         "|---|---|---|---|---|---|---|---|",
     ]
-    for step in COMPARE_STEPS:
+    for step in args.compare_steps:
         for name, _ in runs:
             validation, step_stats = loaded[name]
             val = validation.get(step, {})
@@ -110,7 +115,7 @@ def main():
             "| step | arm | seeds | mean all | mean 3 nums | mean 4 nums | per-seed all |",
             "|---|---|---|---|---|---|---|",
         ]
-        for step in COMPARE_STEPS:
+        for step in args.compare_steps:
             for name, dirs in seed_groups.items():
                 rows = [load_jsonl_by_step(os.path.join(d, "validation_stats.jsonl")).get(step) if os.path.exists(os.path.join(d, "validation_stats.jsonl")) else None for d in dirs]
                 present = [row for row in rows if row]
@@ -128,7 +133,7 @@ def main():
             f"| step | seed | only {arm} | only {reference} | both | neither |",
             "|---|---|---|---|---|---|",
         ]
-        for step in PAIRED_STEPS:
+        for step in args.paired_steps:
             for seed_index, (arm_dir, reference_dir) in enumerate(zip(seed_groups[arm], seed_groups[reference])):
                 arm_success, reference_success = validation_success_by_prompt(arm_dir, step), validation_success_by_prompt(reference_dir, step)
                 if arm_success is None or reference_success is None:
@@ -138,6 +143,34 @@ def main():
                 only_reference = sum(reference_success[p] and not arm_success[p] for p in arm_success)
                 both = sum(arm_success[p] and reference_success[p] for p in arm_success)
                 lines.append(f"| {step} | {seed_index} | {only_arm} | {only_reference} | {both} | {len(arm_success) - only_arm - only_reference - both} |")
+    if args.milestones:
+        lines += [
+            "",
+            "## First validation step reaching a success level",
+            "",
+            "Earliest validated step whose greedy val success is at least the level (— = never reached among the validated steps).",
+            "",
+            "| run | last validated step | " + " | ".join(f"first step >= {100 * level:.0f}%" for level in MILESTONES) + " |",
+            "|---|---|" + "---|" * len(MILESTONES),
+        ]
+        for name, _ in runs:
+            validation = loaded[name][0]
+            first_steps = [next((step for step in sorted(validation) if validation[step]["val_greedy_success_all"] >= level), None) for level in MILESTONES]
+            lines.append(f"| {name} | {max(validation) if validation else '—'} | " + " | ".join("—" if step is None else str(step) for step in first_steps) + " |")
+        lines += [
+            "",
+            "## First 100 steps: mixed groups and hindsight samples",
+            "",
+            "Means over every training step in the interval. Hindsight positives/negatives per step as in the degeneration table.",
+            "",
+            "| steps | run | mixed groups | hindsight positives / step | hindsight negatives / step |",
+            "|---|---|---|---|---|",
+        ]
+        for first_step, last_step in EARLY_WINDOWS:
+            for name, _ in runs:
+                step_stats = loaded[name][1]
+                interval_mean = lambda key: (lambda values: sum(values) / len(values) if values else None)([step_stats[s][key] for s in range(first_step, last_step + 1) if s in step_stats and step_stats[s].get(key) is not None])
+                lines.append(f"| {first_step}-{last_step} | {name} | {format_percent(interval_mean('mixed_group_rate'))} | {format_number(interval_mean('hindsight_positive_samples'))} | {format_number(interval_mean('hindsight_negative_samples'))} |")
     split_classes = ["positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage"]
     split_runs = [name for name, _ in runs if any("hindsight_negative_valid_samples" in row for row in loaded[name][1].values())]
     if split_runs:

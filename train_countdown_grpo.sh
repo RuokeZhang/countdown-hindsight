@@ -9,6 +9,7 @@
 #                                prompts; _orig_ratio (arm G) uses original-prompt log probs as their PPO ratio denominator
 #                                (default none = baseline)
 #   --relabel_p P                probability that an all-failed group enters relabeling (default 1.0)
+#   --max_response_length N      response token limit (default 64; 96 for the 5-number set, which needs 4 equation lines)
 set -euo pipefail
 
 SEED=0
@@ -20,6 +21,7 @@ RUN_NAME=""
 REWARD=binary
 SAMPLER=none
 RELABEL_P=1.0
+MAX_RESPONSE_LENGTH=64
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --seed) SEED="$2"; shift 2 ;;
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
         --reward) REWARD="$2"; shift 2 ;;
         --sampler) SAMPLER="$2"; shift 2 ;;
         --relabel_p) RELABEL_P="$2"; shift 2 ;;
+        --max_response_length) MAX_RESPONSE_LENGTH="$2"; shift 2 ;;
         *) break ;;
     esac
 done
@@ -90,7 +93,7 @@ python -m verl.trainer.main_ppo \
     data.val_files=${DATA_DIR}/val.parquet \
     data.train_batch_size=64 \
     data.max_prompt_length=256 \
-    data.max_response_length=64 \
+    data.max_response_length=${MAX_RESPONSE_LENGTH} \
     data.filter_overlong_prompts=True \
     data.truncation=error \
     data.shuffle=True \

@@ -7,7 +7,8 @@
 | `countdown_grader.py` | 判分器（parse → arithmetic → usage → target），零样本评测和训练共用 |
 | `test_countdown_grader.py` | 判分器单测：`python3 -m unittest test_countdown_grader -v` |
 | `run_countdown_baseline.py` | 零样本评测（vLLM），以及 prompt v1–v4 的定义（`build_prompt`） |
-| `prepare_countdown_data.py` | 生成 verl 用的 train/val parquet（prompt v3） |
+| `prepare_countdown_data.py` | 生成 verl 用的 train/val parquet（prompt v3）；`--num_count 4\|5` 只生成一种难度（5 个数的题按原数据集的分布自己生成：数字 1–99、目标 10–100，只保留有解的） |
+| `probe_countdown_difficulty.py` | 用初始模型对训练集采一步（N 题 × 8 条，不更新参数），报告成功率、混合组比例、全失败组里可改写回复的占比；结果在 `training_results/difficulty_probe/` |
 | `countdown_reward.py` | verl 自定义 reward：四步全过记 1.0，否则 0.0 |
 | `countdown_reward_validbonus.py` | B 组 reward：四步全过 1.0，过了 parse/arithmetic/usage 但没中目标 0.1，否则 0.0 |
 | `countdown_hindsight.py` | 全失败组的改写逻辑（候选值、按 p 决定是否改写、新目标下重新判分） |
@@ -26,7 +27,10 @@
 | `training_results/three_arm_comparison.md` | 三组对比表 |
 | `training_results/grpo_hindsight_per_sample_p0.25_seed0/` | D 组（逐条改写：候选改成自己的值记 1，parse/arithmetic/usage 失败记 0，两者放进每步一个新 uid 统一归一化；p=0.25），跑到第 100 步停止；`relabel_log/advantages/` 是每条样本实际的 advantage |
 | `training_results/arm_comparison_baseline_A_B_C_D.md` | 五组对比表（C 到第 50 步，D 到第 100 步） |
-| `training_results/grpo_hindsight_per_sample_split_p0.25_seed0/` | E 组（在 D 的基础上，每条候选按 0.5 概率改写成正样本或留在原 prompt 记 0），训练中，目前是中期结果 |
+| `training_results/grpo_hindsight_per_sample_split_p0.25_seed0/` | E 组（在 D 的基础上，每条候选按 0.5 概率改写成正样本或留在原 prompt 记 0），300 步 |
+| `training_results/grpo_hindsight_split_keepprompt_p0.25_seed0/` | F 组（同 E，但正样本保留原 prompt），300 步 |
+| `training_results/grpo_hindsight_split_origratio_p0.25_seed0/` | G 组（同 E，但改写正样本的 PPO ratio 分母用原 prompt 下的 log prob），在第 50 步停止（第 51–59 步的原始数据只在 OSS 的 results tar 里，不计入统计） |
+| `training_results/grpo_binary_n5_seed0/`、`grpo_hindsight_split_p1_n5_seed0/` | 稀疏条件（只含 5 个数的题，回复上限 96 token，每 25 步验证）下的 baseline 和 E（p=1.0） |
 
 完整 rollout 和全部 checkpoint 在 Aliyun OSS：`oss://ruoke-h200-export/countdown-grpo-20261122/`（us-west-1）。checkpoint 是 `tar` 后按 4GB 切分的，恢复方法：`cat global_step_N.tar.part_* | tar -xf -`，校验文件为 `checkpoints/checkpoint_parts.md5`。
 
