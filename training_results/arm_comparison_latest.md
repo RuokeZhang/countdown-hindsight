@@ -11,6 +11,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 0 | D_per_sample_p0.25 | 9.6% | 16.8% | 2.3% | 69.2% | 43.4 | 32.5% |
 | 0 | E_split_p0.25 | 9.4% | 16.4% | 2.3% | 68.6% | 42.5 | 26.9% |
 | 0 | F_keep_prompt_p0.25 | 9.0% | 15.6% | 2.3% | 71.7% | 34.0 | 25.5% |
+| 0 | G_orig_ratio_p0.25 | 9.4% | 16.4% | 2.3% | 67.4% | 42.7 | 28.0% |
 | 50 | baseline | 20.9% | 35.5% | 6.2% | 75.1% | 75.7 | 28.0% |
 | 50 | A_group_p1 | 16.8% | 28.1% | 5.5% | 84.1% | 56.5 | 9.7% |
 | 50 | B_validbonus | 14.1% | 25.0% | 3.1% | 100.0% | 0.0 | 2.7% |
@@ -18,6 +19,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 50 | D_per_sample_p0.25 | 17.6% | 31.2% | 3.9% | 99.5% | 0.8 | 14.4% |
 | 50 | E_split_p0.25 | 20.5% | 35.2% | 5.9% | 97.6% | 5.1 | 31.1% |
 | 50 | F_keep_prompt_p0.25 | 21.1% | 36.7% | 5.5% | 99.6% | 0.1 | 15.6% |
+| 50 | G_orig_ratio_p0.25 | — | — | — | 98.2% | 1.5 | 9.4% |
 | 100 | baseline | 26.8% | 44.5% | 9.0% | 69.6% | 109.4 | 13.6% |
 | 100 | A_group_p1 | 23.2% | 39.8% | 6.6% | 76.4% | 94.0 | 11.4% |
 | 100 | B_validbonus | 17.0% | 30.5% | 3.5% | 100.0% | 0.0 | 4.2% |
@@ -25,6 +27,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 100 | D_per_sample_p0.25 | 27.7% | 45.3% | 10.2% | 100.0% | 0.2 | 8.1% |
 | 100 | E_split_p0.25 | 32.2% | 52.0% | 12.5% | 98.7% | 2.9 | 25.6% |
 | 100 | F_keep_prompt_p0.25 | 27.3% | 46.5% | 8.2% | 99.6% | 0.4 | 4.8% |
+| 100 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 150 | baseline | 34.0% | 55.1% | 12.9% | 45.8% | 166.4 | 7.8% |
 | 150 | A_group_p1 | 28.7% | 48.8% | 8.6% | 67.0% | 100.9 | 4.2% |
 | 150 | B_validbonus | 16.0% | 27.0% | 5.1% | 100.0% | 0.0 | 1.9% |
@@ -32,6 +35,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 150 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 150 | E_split_p0.25 | 39.3% | 62.9% | 15.6% | 98.4% | 2.6 | 16.7% |
 | 150 | F_keep_prompt_p0.25 | 29.3% | 49.6% | 9.0% | 99.9% | 0.2 | 3.9% |
+| 150 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 200 | baseline | 35.5% | 56.6% | 14.5% | 55.3% | 163.8 | 4.1% |
 | 200 | A_group_p1 | 29.5% | 49.6% | 9.4% | 82.3% | 68.1 | 2.0% |
 | 200 | B_validbonus | 15.0% | 25.4% | 4.7% | 100.0% | 0.2 | 2.0% |
@@ -39,6 +43,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 200 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 200 | E_split_p0.25 | 44.5% | 69.5% | 19.5% | 99.8% | 0.2 | 12.2% |
 | 200 | F_keep_prompt_p0.25 | 29.1% | 49.6% | 8.6% | 100.0% | 0.0 | 3.3% |
+| 200 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 250 | baseline | 38.9% | 61.7% | 16.0% | 68.8% | 134.4 | 2.7% |
 | 250 | A_group_p1 | 31.4% | 53.1% | 9.8% | 70.8% | 114.2 | 3.4% |
 | 250 | B_validbonus | 18.2% | 31.6% | 4.7% | 100.0% | 0.0 | 1.7% |
@@ -46,6 +51,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 250 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 250 | E_split_p0.25 | 47.1% | 73.8% | 20.3% | 99.8% | 0.1 | 8.3% |
 | 250 | F_keep_prompt_p0.25 | 30.5% | 50.4% | 10.5% | 99.9% | 0.0 | 0.8% |
+| 250 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 300 | baseline | 38.5% | 59.8% | 17.2% | 45.2% | 219.6 | 2.0% |
 | 300 | A_group_p1 | 36.5% | 60.2% | 12.9% | 51.0% | 136.4 | 3.1% |
 | 300 | B_validbonus | 17.0% | 28.5% | 5.5% | 100.0% | 0.0 | 1.9% |
@@ -53,6 +59,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 300 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 300 | E_split_p0.25 | 47.5% | 74.6% | 20.3% | 99.6% | 0.2 | 6.2% |
 | 300 | F_keep_prompt_p0.25 | 30.7% | 51.2% | 10.2% | 99.9% | 0.0 | 1.9% |
+| 300 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 
 ## Degeneration signals
 
@@ -67,6 +74,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 0 | D_per_sample_p0.25 | 0.229 | 32.5% | 34.0% | 32.0% | 12.2 | 66.3 |
 | 0 | E_split_p0.25 | 0.237 | 26.9% | 36.2% | 33.4% | 7.4 | 77.4 |
 | 0 | F_keep_prompt_p0.25 | 0.224 | 25.5% | 30.9% | 32.6% | 9.0 | 75.4 |
+| 0 | G_orig_ratio_p0.25 | 0.233 | 28.0% | 34.5% | 34.1% | 6.0 | 77.7 |
 | 25 | baseline | 0.117 | 32.2% | 31.7% | — | 0.0 | 0.0 |
 | 25 | A_group_p1 | 0.039 | 12.2% | 98.3% | — | 0.0 | 0.0 |
 | 25 | B_validbonus | 0.009 | 4.4% | 0.1% | — | 0.0 | 0.0 |
@@ -74,6 +82,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 25 | D_per_sample_p0.25 | 0.041 | 19.1% | 4.3% | — | 53.8 | 9.9 |
 | 25 | E_split_p0.25 | 0.100 | 39.5% | 7.4% | — | 20.5 | 35.8 |
 | 25 | F_keep_prompt_p0.25 | 0.039 | 21.7% | 2.1% | — | 31.1 | 34.8 |
+| 25 | G_orig_ratio_p0.25 | 0.040 | 11.2% | 10.0% | — | 23.4 | 41.1 |
 | 50 | baseline | 0.083 | 28.0% | 25.3% | 26.4% | 0.0 | 0.0 |
 | 50 | A_group_p1 | 0.032 | 9.7% | 96.8% | 97.9% | 0.0 | 0.0 |
 | 50 | B_validbonus | 0.004 | 2.7% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -81,6 +90,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 50 | D_per_sample_p0.25 | 0.019 | 14.4% | 0.3% | 0.2% | 53.9 | 3.8 |
 | 50 | E_split_p0.25 | 0.058 | 31.1% | 2.3% | 2.0% | 22.9 | 30.7 |
 | 50 | F_keep_prompt_p0.25 | 0.024 | 15.6% | 0.5% | 0.2% | 30.1 | 30.1 |
+| 50 | G_orig_ratio_p0.25 | 0.018 | 9.4% | 4.4% | — | 21.0 | 33.0 |
 | 100 | baseline | 0.051 | 13.6% | 28.1% | 25.9% | 0.0 | 0.0 |
 | 100 | A_group_p1 | 0.028 | 11.4% | 94.8% | 94.4% | 0.0 | 0.0 |
 | 100 | B_validbonus | 0.006 | 4.2% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -88,6 +98,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 100 | D_per_sample_p0.25 | 0.013 | 8.1% | 0.0% | 0.3% | 72.0 | 2.6 |
 | 100 | E_split_p0.25 | 0.044 | 25.6% | 0.5% | 0.3% | 26.9 | 27.8 |
 | 100 | F_keep_prompt_p0.25 | 0.010 | 4.8% | 0.1% | 0.5% | 35.2 | 37.4 |
+| 100 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 150 | baseline | 0.052 | 7.8% | 55.3% | 55.9% | 0.0 | 0.0 |
 | 150 | A_group_p1 | 0.027 | 4.2% | 79.6% | 81.4% | 0.4 | 1.2 |
 | 150 | B_validbonus | 0.004 | 1.9% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -95,6 +106,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 150 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 150 | E_split_p0.25 | 0.029 | 16.7% | 0.9% | 2.3% | 29.5 | 33.8 |
 | 150 | F_keep_prompt_p0.25 | 0.008 | 3.9% | 0.1% | 0.0% | 33.5 | 33.8 |
+| 150 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 200 | baseline | 0.036 | 4.1% | 69.2% | 69.1% | 0.0 | 0.0 |
 | 200 | A_group_p1 | 0.008 | 2.0% | 96.3% | 96.1% | 0.6 | 0.2 |
 | 200 | B_validbonus | 0.003 | 2.0% | 0.1% | 0.0% | 0.0 | 0.0 |
@@ -102,6 +114,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 200 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 200 | E_split_p0.25 | 0.018 | 12.2% | 0.4% | 0.0% | 17.2 | 24.6 |
 | 200 | F_keep_prompt_p0.25 | 0.005 | 3.3% | 0.0% | 0.0% | 24.2 | 29.5 |
+| 200 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 250 | baseline | 0.023 | 2.7% | 86.1% | 85.9% | 0.0 | 0.0 |
 | 250 | A_group_p1 | 0.017 | 3.4% | 88.0% | 86.6% | 1.1 | 1.3 |
 | 250 | B_validbonus | 0.002 | 1.7% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -109,6 +122,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 250 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 250 | E_split_p0.25 | 0.011 | 8.3% | 0.2% | 0.4% | 29.4 | 27.1 |
 | 250 | F_keep_prompt_p0.25 | 0.004 | 0.8% | 0.0% | 0.0% | 34.1 | 33.2 |
+| 250 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 | 300 | baseline | 0.032 | 2.0% | 68.1% | 66.3% | 0.0 | 0.0 |
 | 300 | A_group_p1 | 0.026 | 3.1% | 50.2% | 56.6% | 0.0 | 0.0 |
 | 300 | B_validbonus | 0.002 | 1.9% | 0.0% | 0.0% | 0.0 | 0.0 |
@@ -116,6 +130,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 300 | D_per_sample_p0.25 | — | — | — | — | — | — |
 | 300 | E_split_p0.25 | 0.011 | 6.2% | 0.1% | 0.7% | 24.6 | 26.8 |
 | 300 | F_keep_prompt_p0.25 | 0.007 | 1.9% | 0.1% | 0.0% | 29.2 | 33.0 |
+| 300 | G_orig_ratio_p0.25 | — | — | — | — | — | — |
 
 ## Validation across seeds
 
@@ -163,20 +178,28 @@ Window means as above. negative_valid = valid relabel candidate kept on its orig
 |---|---|---|---|---|---|---|
 | 0 | E_split_p0.25 | 7.4 | 6.8 | 35.2 | 26.3 | 9.1 |
 | 0 | F_keep_prompt_p0.25 | 9.0 | 5.7 | 35.7 | 25.1 | 8.9 |
+| 0 | G_orig_ratio_p0.25 | 6.0 | 5.8 | 39.7 | 25.2 | 7.0 |
 | 25 | E_split_p0.25 | 20.5 | 15.6 | 10.6 | 5.6 | 4.0 |
 | 25 | F_keep_prompt_p0.25 | 31.1 | 27.5 | 3.7 | 2.7 | 0.9 |
+| 25 | G_orig_ratio_p0.25 | 23.4 | 21.7 | 10.6 | 7.5 | 1.3 |
 | 50 | E_split_p0.25 | 22.9 | 22.7 | 2.6 | 3.7 | 1.7 |
 | 50 | F_keep_prompt_p0.25 | 30.1 | 28.4 | 0.4 | 0.7 | 0.6 |
+| 50 | G_orig_ratio_p0.25 | 21.0 | 21.5 | 2.5 | 9.0 | 0.0 |
 | 100 | E_split_p0.25 | 26.9 | 24.7 | 1.0 | 1.1 | 1.0 |
 | 100 | F_keep_prompt_p0.25 | 35.2 | 35.0 | 0.0 | 1.4 | 1.0 |
+| 100 | G_orig_ratio_p0.25 | — | — | — | — | — |
 | 150 | E_split_p0.25 | 29.5 | 30.2 | 0.8 | 0.0 | 2.8 |
 | 150 | F_keep_prompt_p0.25 | 33.5 | 31.6 | 0.1 | 1.4 | 0.7 |
+| 150 | G_orig_ratio_p0.25 | — | — | — | — | — |
 | 200 | E_split_p0.25 | 17.2 | 20.4 | 0.2 | 1.4 | 2.6 |
 | 200 | F_keep_prompt_p0.25 | 24.2 | 28.6 | 0.0 | 0.1 | 0.8 |
+| 200 | G_orig_ratio_p0.25 | — | — | — | — | — |
 | 250 | E_split_p0.25 | 29.4 | 26.1 | 0.2 | 0.0 | 0.8 |
 | 250 | F_keep_prompt_p0.25 | 34.1 | 32.0 | 0.1 | 0.8 | 0.3 |
+| 250 | G_orig_ratio_p0.25 | — | — | — | — | — |
 | 300 | E_split_p0.25 | 24.6 | 26.8 | 0.0 | 0.0 | 0.0 |
 | 300 | F_keep_prompt_p0.25 | 29.2 | 31.4 | 0.0 | 1.6 | 0.0 |
+| 300 | G_orig_ratio_p0.25 | — | — | — | — | — |
 
 ## Hindsight log-prob diagnostic (D_per_sample_p0.25): logp_new - logp_orig (sum over response tokens)
 
@@ -210,6 +233,18 @@ Per-step summaries averaged over the steps in each interval (steps with no relab
 |---|---|---|---|---|---|---|---|
 | 1-25 | — | — | — | — | — | 0 | 0 |
 | 26-50 | — | — | — | — | — | 0 | 0 |
+| 51-100 | — | — | — | — | — | 0 | 0 |
+| 101-200 | — | — | — | — | — | 0 | 0 |
+| 201-300 | — | — | — | — | — | 0 | 0 |
+
+## Hindsight log-prob diagnostic (G_orig_ratio_p0.25): logp_new - logp_orig (sum over response tokens)
+
+Per-step summaries averaged over the steps in each interval (steps with no relabeled sample of a kind are skipped); counts are totals.
+
+| steps | diff mean (new-target success) | diff median (success) | diff mean (new-target fail) | diff median (fail) | share \|diff\| < 0.05 | success samples | fail samples |
+|---|---|---|---|---|---|---|---|
+| 1-25 | 0.075 | 0.127 | — | — | 10.6% | 290.0 | 0.0 |
+| 26-50 | -0.920 | -0.391 | — | — | 43.7% | 506.0 | 0.0 |
 | 51-100 | — | — | — | — | — | 0 | 0 |
 | 101-200 | — | — | — | — | — | 0 | 0 |
 | 201-300 | — | — | — | — | — | 0 | 0 |
