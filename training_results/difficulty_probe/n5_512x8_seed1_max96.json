@@ -1,0 +1,18 @@
+{
+  "train_parquet": "/root/work/data/countdown_v3_n5/train.parquet",
+  "problems": 512,
+  "samples_per_problem": 8,
+  "max_tokens": 96,
+  "success_rate": 0.00146484375,
+  "mixed_group_rate": 0.01171875,
+  "all_fail_group_rate": 0.98828125,
+  "relabel_candidate_share_in_all_fail_groups": 0.04421936758893281,
+  "truncated_rate": 0.06298828125,
+  "stop_stage_shares": {
+    "arithmetic": 0.13916015625,
+    "parse": 0.64794921875,
+    "success": 0.00146484375,
+    "target": 0.090576171875,
+    "usage": 0.120849609375
+  }
+}
