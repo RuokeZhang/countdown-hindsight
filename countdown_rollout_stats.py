@@ -59,6 +59,13 @@ def load_original_targets(relabel_rows):
     return {row["uid"]: int(row["original_target"]) for row in relabeled_rows(relabel_rows)}
 
 
+def load_positive_rewards(relabel_rows):
+    """rollout key -> reward of per-sample positives; arm F keeps their original prompt, so the prompt alone does not
+    tell the training reward."""
+    return {key: reward for row in relabeled_rows(relabel_rows) if "classes" in row
+            for key, cls, reward in zip(row["keys"], row["classes"], row["new_rewards"]) if cls == "positive"}
+
+
 def load_training_uids(relabel_rows):
     """rollout key -> uid GRPO normalized it under, for per-sample relabeling (empty otherwise)."""
     return {key: training_uid for row in relabeled_rows(relabel_rows) if "training_uids" in row for key, training_uid in zip(row["keys"], row["training_uids"])}
@@ -93,7 +100,7 @@ def hindsight_class_counts(relabel_rows):
     return counts
 
 
-def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type, training_uid_by_key=None):
+def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, reward_type, training_uid_by_key=None, positive_reward_by_key=None):
     records = []
     for row in rollout_rows:
         nums_text, target_text = PROMPT_PATTERN.search(row["input"]).groups()
@@ -115,7 +122,7 @@ def grade_step(rollout_rows, problem_id_by_multiset, original_target_by_uid, rew
             "relabeled": group_id in original_target_by_uid,
             "output": row["output"],
             "score": float(row["score"]),
-            "expected_training_reward": training_reward_from_grade(training_grade, reward_type),
+            "expected_training_reward": (positive_reward_by_key or {}).get(row["uid"], training_reward_from_grade(training_grade, reward_type)),
             "too_many_lines": grade["stopped_at"] == "parse" and has_too_many_lines(row["output"], len(nums)),
             "claims_target": last_line_claims_target(row["output"], original_target),
         })
@@ -205,7 +212,7 @@ def main():
     for path in rollout_paths:
         step = int(os.path.basename(path).split(".")[0])
         relabel_rows = load_relabel_rows(args.run_dir, step)
-        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset, load_original_targets(relabel_rows), args.reward_type, load_training_uids(relabel_rows))
+        records = grade_step([json.loads(line) for line in open(path)], problem_id_by_multiset, load_original_targets(relabel_rows), args.reward_type, load_training_uids(relabel_rows), load_positive_rewards(relabel_rows))
         logged = logged_by_step.get(step, {})
         hindsight_positives, hindsight_negatives = hindsight_sample_counts(relabel_rows)
         summary = {

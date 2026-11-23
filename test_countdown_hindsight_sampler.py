@@ -8,11 +8,13 @@ import json
 import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 import ray
 import torch
 import transfer_queue as tq
+from tensordict import TensorDict
 from transfer_queue import KVBatchMeta
 from verl.utils.model import compute_position_id_with_mask
 from verl.utils.tensordict_utils import list_of_dict_to_tensordict
@@ -29,6 +31,35 @@ GROUPS = {
     "mixed": ["44 + 19 = 63\n63 + 35 = 98"] + ["44 + 19 = 63\n63 - 35 = 28"] * 7,
     "nocandidate": ["Sure"] * 8,
 }
+
+
+def fake_log_probs(length):
+    return torch.full((length,), -0.25) - 0.001 * torch.arange(length, dtype=torch.float32)
+
+
+class FakeActorGroup:
+    """Stands in for actor_rollout_wg: writes deterministic per-position log probs over prompt+response."""
+
+    def compute_log_prob(self, meta):
+        data = tq.kv_batch_get(keys=meta.keys, partition_id=meta.partition_id, select_fields=["input_ids"])
+        rows = [fake_log_probs(ids.numel()) for ids in data["input_ids"].unbind(0)]
+        tq.kv_batch_put(keys=meta.keys, partition_id=meta.partition_id, fields=TensorDict({"log_probs": torch.nested.as_nested_tensor(rows, layout=torch.jagged)}, batch_size=len(rows)))
+        return list(meta.keys)
+
+
+class FakeTrainer:
+    def __init__(self):
+        self.config = SimpleNamespace(actor_rollout_ref=SimpleNamespace(rollout=SimpleNamespace(log_prob_micro_batch_size_per_gpu=4)))
+        self.actor_rollout_wg = FakeActorGroup()
+
+    def _compute_old_log_prob(self, batch, metrics):
+        return batch
+
+    def _compute_advantage(self, batch, metrics):
+        return batch
+
+    def refill(self):
+        pass
 
 
 class TestHindsightSamplerTransferQueue(unittest.TestCase):
@@ -54,6 +85,24 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
             max_off_policy_strategy="drop",
             sampler_kwargs={"seed": 0, "relabel_probability": 1.0, "relabel_log_dir": cls.per_sample_log_dir, "model_path": MODEL_PATH, "relabel_mode": "per_sample"},
             refill_fn=None,
+        )
+        cls.keep_prompt_log_dir = tempfile.mkdtemp()
+        cls.keep_prompt_sampler = HindsightRelabelReplayBuffer(
+            trainer_mode="sync",
+            trainer_config={},
+            max_off_policy_threshold=None,
+            max_off_policy_strategy="drop",
+            sampler_kwargs={"seed": 0, "relabel_probability": 1.0, "relabel_log_dir": cls.keep_prompt_log_dir, "model_path": MODEL_PATH, "relabel_mode": "per_sample_split_keep_prompt"},
+            refill_fn=None,
+        )
+        cls.orig_ratio_log_dir = tempfile.mkdtemp()
+        cls.orig_ratio_sampler = HindsightRelabelReplayBuffer(
+            trainer_mode="sync",
+            trainer_config={},
+            max_off_policy_threshold=None,
+            max_off_policy_strategy="drop",
+            sampler_kwargs={"seed": 0, "relabel_probability": 1.0, "relabel_log_dir": cls.orig_ratio_log_dir, "model_path": MODEL_PATH, "relabel_mode": "per_sample_split_orig_ratio", "logprob_diagnostic": True},
+            refill_fn=FakeTrainer().refill,
         )
         cls.split_log_dir = tempfile.mkdtemp()
         cls.split_sampler = HindsightRelabelReplayBuffer(
@@ -157,7 +206,7 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
         keys, samples, tags = [], [], []
         for uid, responses in groups.items():
             for session_id, response_text in enumerate(responses):
-                score = 1.0 if (uid in ("psmixed", "spmixed") and session_id == 0) else 0.0
+                score = 1.0 if (uid in ("psmixed", "spmixed", "kpmixed", "ormixed") and session_id == 0) else 0.0
                 sample, tag = self._make_sample(uid, session_id, response_text, score)
                 keys.append(f"{uid}_{session_id}_0")
                 samples.append(sample)
@@ -275,9 +324,74 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
                 self.assertEqual(float(stored_row["rm_scores"].sum()), 0.0)
         self.assertLessEqual(len(pool_uids), 1)
 
+    def test_keep_prompt_matches_split_classes_and_keeps_prompts(self):
+        split_keys, _, split_tags = self._put_groups({"kpsplitref": GROUPS["relabelme"]})
+        self.split_sampler._relabel_batch(KVBatchMeta(partition_id="train", keys=split_keys, tags=split_tags), global_steps=9)
+        keys, samples, tags = self._put_groups({"kprelabel": GROUPS["relabelme"], "kpmixed": GROUPS["mixed"]})
+        relabeled_batch, metrics = self.keep_prompt_sampler._relabel_batch(KVBatchMeta(partition_id="train", keys=keys, tags=tags), global_steps=9)
+        split_row = json.loads(open(os.path.join(self.split_log_dir, "9.jsonl")).readline())
+        row = json.loads(open(os.path.join(self.keep_prompt_log_dir, "9.jsonl")).readline())
+        # Same seed, step, problem_id and response order -> the same selection and the same 50/50 split as arm E.
+        self.assertEqual(row["classes"], split_row["classes"])
+        self.assertFalse(row["prompt_rewritten"])
+        self.assertTrue(metrics["hindsight/pool_built"])
+        stored = tq.kv_batch_get(keys=keys, partition_id="train")
+        pool_uids = set()
+        for index, key in enumerate(keys):
+            stored_row, original = stored[index], samples[index]
+            group, position = key.split("_")[0], int(key.split("_")[1])
+            for field_name in ("prompts", "input_ids", "position_ids", "responses"):
+                self.assertTrue(torch.equal(stored_row[field_name], original[field_name]), field_name)
+            self.assertEqual(stored_row["extra_info"]["target"], TARGET)
+            self.assertEqual(relabeled_batch.tags[index], tags[index])
+            if group == "kpmixed":
+                self.assertEqual(stored_row["uid"], "kpmixed")
+                self.assertTrue(torch.equal(stored_row["rm_scores"], original["rm_scores"]))
+                continue
+            cls = row["classes"][position]
+            if cls == "untouched":
+                self.assertEqual(stored_row["uid"], group)
+                continue
+            pool_uids.add(stored_row["uid"])
+            self.assertEqual(float(stored_row["rm_scores"].sum()), 1.0 if cls == "positive" else 0.0)
+            self.assertEqual(float(stored_row["rm_scores"][-1]), 1.0 if cls == "positive" else 0.0)
+        self.assertEqual(len(pool_uids), 1)
+        self.assertIn("positive", row["classes"])
+
+    def test_orig_ratio_replaces_only_positive_denominators(self):
+        keys, samples, tags = [], [], []
+        for uid, responses in {"orrelabel": GROUPS["relabelme"], "ormixed": GROUPS["mixed"], "ornone": GROUPS["nocandidate"]}.items():
+            for session_id, response_text in enumerate(responses):
+                score = 1.0 if (uid == "ormixed" and session_id == 0) else 0.0
+                sample, tag = self._make_sample(uid, session_id, response_text, score)
+                sample["old_log_probs"] = torch.full((sample["responses"].size(0),), -1.0)
+                keys.append(f"{uid}_{session_id}_0")
+                samples.append(sample)
+                tags.append(tag)
+        tq.kv_batch_put(keys=keys, partition_id="train", fields=list_of_dict_to_tensordict(samples), tags=tags)
+        self.orig_ratio_sampler._relabel_batch(KVBatchMeta(partition_id="train", keys=keys, tags=tags), global_steps=11)
+        metrics = {}
+        self.orig_ratio_sampler._run_logprob_diagnostic({}, metrics)
+        row = json.loads(open(os.path.join(self.orig_ratio_log_dir, "11.jsonl")).readline())
+        positive_keys = [key for key, cls in zip(row["keys"], row["classes"]) if cls == "positive"]
+        self.assertTrue(positive_keys)
+        self.assertEqual(metrics["hindsight/orig_ratio_replaced_samples"], len(positive_keys))
+        self.assertEqual(metrics["hindsight/orig_ratio_changed_samples"], len(positive_keys))
+        self.assertEqual(metrics["hindsight/orig_ratio_writeback_max_abs_error"], 0.0)
+        stored = tq.kv_batch_get(keys=keys, partition_id="train", select_fields=["old_log_probs"])["old_log_probs"].unbind(0)
+        for index, key in enumerate(keys):
+            response_length = samples[index]["responses"].size(0)
+            if key in positive_keys:
+                # The original-prompt forward predicts response token t from position prompt_length + t - 1.
+                prompt_length = samples[index]["prompts"].size(0)
+                expected = fake_log_probs(prompt_length + response_length)[prompt_length - 1 : prompt_length + response_length - 1]
+                self.assertTrue(torch.equal(stored[index], expected), key)
+            else:
+                self.assertTrue(torch.equal(stored[index], torch.full((response_length,), -1.0)), key)
+
     def test_validation_batch_is_not_relabeled(self):
         val_batch = KVBatchMeta(partition_id="val", keys=["v_0_0"], tags=[{}])
-        for sampler in (self.sampler, self.per_sample_sampler, self.split_sampler):
+        for sampler in (self.sampler, self.per_sample_sampler, self.split_sampler, self.keep_prompt_sampler, self.orig_ratio_sampler):
             with mock.patch.object(ReplayBuffer, "sample", return_value=(val_batch, {})), mock.patch.object(sampler, "_relabel_batch", side_effect=AssertionError("val relabeled")):
                 batch, metrics = sampler.sample(global_steps=5, partition_id="val", batch_size=1)
             self.assertIs(batch, val_batch)

@@ -1,11 +1,13 @@
 #!/bin/bash
 # Usage: bash train_countdown_grpo.sh --seed 0 --lr 1e-6 --total_steps 400 --run_name grpo_seed0 [extra hydra overrides...]
 #   --reward binary|validbonus   reward function (default binary = baseline)
-#   --sampler none|hindsight|hindsight_per_sample|hindsight_per_sample_split
+#   --sampler none|hindsight|hindsight_per_sample|hindsight_per_sample_split|hindsight_per_sample_split_keep_prompt|hindsight_per_sample_split_orig_ratio
 #                                hindsight relabels whole all-failed groups in place; hindsight_per_sample relabels each
 #                                candidate to its own value and normalizes candidates and invalid responses in one new uid
 #                                hindsight_per_sample_split additionally keeps each candidate on its original prompt as a
-#                                reward-0 sample with probability 0.5 (default none = baseline)
+#                                reward-0 sample with probability 0.5; _keep_prompt (arm F) does not rewrite the positives'
+#                                prompts; _orig_ratio (arm G) uses original-prompt log probs as their PPO ratio denominator
+#                                (default none = baseline)
 #   --relabel_p P                probability that an all-failed group enters relabeling (default 1.0)
 set -euo pipefail
 
@@ -53,7 +55,7 @@ esac
 MODE_ARGS=()
 case "${SAMPLER}" in
     none) ;;
-    hindsight|hindsight_per_sample|hindsight_per_sample_split)
+    hindsight|hindsight_per_sample|hindsight_per_sample_split|hindsight_per_sample_split_keep_prompt|hindsight_per_sample_split_orig_ratio)
         # Relabeled samples get a new prompt, so their rollout log probs would be stale; disable them for every sample.
         MODE_ARGS=(
             trainer.v1.sampler.custom_sampler.path=${CODE_DIR}/countdown_hindsight_sampler.py
@@ -66,7 +68,7 @@ case "${SAMPLER}" in
             actor_rollout_ref.rollout.calculate_log_probs=False
             algorithm.rollout_correction.bypass_mode=False
         )
-        if [[ "${SAMPLER}" == hindsight_per_sample || "${SAMPLER}" == hindsight_per_sample_split ]]; then
+        if [[ "${SAMPLER}" == hindsight_per_sample* ]]; then
             MODE_ARGS+=(
                 +trainer.v1.sampler.sampler_kwargs.relabel_mode=${SAMPLER#hindsight_}
                 +trainer.v1.sampler.sampler_kwargs.advantage_log=True

@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 
 import torch
 import transfer_queue as tq
+from tensordict import TensorDict
 from transfer_queue import KVBatchMeta
 from transformers import AutoConfig
 from verl.trainer.ppo.v1.replay_buffer import ReplayBuffer
@@ -28,6 +29,9 @@ from run_countdown_baseline import build_prompt
 PROMPT_VERSION = "v3"
 DIAGNOSTIC_PARTITION = "hindsight_diag"
 SMALL_LOGP_DIFF = 0.05
+# Bf16 batch-composition noise between the two forwards was at most ~0.3 nats per token; a misaligned forward is far larger.
+MAX_CONTROL_TOKEN_DIFF_FOR_ORIG_RATIO = 1.5
+PER_SAMPLE_MODES = ("per_sample", "per_sample_split", "per_sample_split_keep_prompt", "per_sample_split_orig_ratio")
 
 
 class HindsightRelabelReplayBuffer(ReplayBuffer):
@@ -40,7 +44,10 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
     original prompt (reward 0), and moves both into one new uid per step so GRPO normalizes them together; the other
     responses stay in their original all-zero group (advantage 0). relabel_mode "per_sample_split" (arm E) is per_sample
     except that each candidate is relabeled (reward 1) or kept on its original prompt as a negative (reward 0) with
-    probability 0.5 each.
+    probability 0.5 each. "per_sample_split_keep_prompt" (arm F) is per_sample_split but positives keep their original
+    prompt (reward 1 all the same). "per_sample_split_orig_ratio" (arm G) is per_sample_split but, for relabeled positives,
+    old_log_probs (the PPO ratio denominator) is replaced by the per-token log probs under the ORIGINAL prompt taken from
+    the diagnostic forward; it therefore requires logprob_diagnostic.
 
     With logprob_diagnostic, the trainer instance's _compute_old_log_prob is wrapped (the trainer is reached through
     refill_fn, a bound method of it). After verl computes old_log_probs for the whole batch, the wrapper runs one extra
@@ -64,13 +71,15 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             processor=None,
         )
         self.relabel_mode = self.sampler_kwargs.get("relabel_mode", "group")
-        if self.relabel_mode not in ("group", "per_sample", "per_sample_split"):
+        if self.relabel_mode not in ("group",) + PER_SAMPLE_MODES:
             raise ValueError(f"unknown relabel_mode {self.relabel_mode}")
         self.logprob_diagnostic = bool(self.sampler_kwargs.get("logprob_diagnostic", False))
         self.advantage_log = bool(self.sampler_kwargs.get("advantage_log", False))
         self.pending_diagnostic = None
         self.pending_log_rows = None
         self.last_train_step = None
+        if self.relabel_mode == "per_sample_split_orig_ratio" and not self.logprob_diagnostic:
+            raise ValueError("per_sample_split_orig_ratio takes the original-prompt log probs from the logprob diagnostic")
         if self.logprob_diagnostic or self.advantage_log:
             # The sampler is built inside PPOTrainer.__init__ (refill_fn is a bound method of it); actor_rollout_wg only
             # exists after trainer.init(), so it is looked up when the diagnostic runs.
@@ -217,6 +226,8 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             changed_key_set = {keys[i] for i in prompt_changed_indices}
             control_count = self.log_prob_micro_batch_size - len(prompt_changed_indices) % self.log_prob_micro_batch_size
             control_keys = [key for key in keys if key not in changed_key_set][:control_count]
+        if self.relabel_mode == "per_sample_split_orig_ratio" and prompt_changed_indices and len(control_keys) != control_count:
+            raise RuntimeError("orig_ratio needs the diagnostic forward but there are not enough control samples")
         if self.logprob_diagnostic and prompt_changed_indices and len(control_keys) == control_count:
             control_data = tq.kv_batch_get(keys=control_keys, partition_id=batch.partition_id)
             control_samples = [self._copy_sample(control_data[i]) for i in range(len(control_keys))]
@@ -228,6 +239,7 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
                 "samples": [original_samples_by_index[i] for i in prompt_changed_indices] + control_samples,
                 "tags": [batch.tags[i] for i in prompt_changed_indices] + [batch.tags[keys.index(key)] for key in control_keys],
                 "new_rewards": [plan[i][1] for i in prompt_changed_indices],
+                "batch_keys": keys,
             }
             self.pending_log_rows = log_rows
         else:
@@ -300,7 +312,7 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             random_seed_text = f"{self.seed}:{global_steps}:{int(extra_info['problem_id'])}"
             decision = relabel_responses_individually(
                 [response_texts[i] for i in indices], nums, original_target, self.relabel_probability, random_seed_text,
-                split_candidates=self.relabel_mode == "per_sample_split",
+                split_candidates=self.relabel_mode.startswith("per_sample_split"),
             )
             if not decision["selected"]:
                 continue
@@ -328,11 +340,13 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
         assert pool_uid is None or ("_" not in pool_uid and pool_uid not in indices_by_uid)
 
         plan = {}
+        keep_prompt = self.relabel_mode == "per_sample_split_keep_prompt"
         if pool_built:
             for batch_index, cls, target, reward in pooled:
-                plan[batch_index] = (target, reward, pool_uid)
+                plan[batch_index] = (None if keep_prompt else target, reward, pool_uid)
         for row in log_rows:
             row["pool_built"] = pool_built
+            row["prompt_rewritten"] = not keep_prompt
             row["training_uids"] = [pool_uid if (pool_built and cls != "untouched") else row["uid"] for cls in row["classes"]]
 
         metrics = {
@@ -345,7 +359,7 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             "hindsight/untouched_samples_in_selected_groups": sum(cls == "untouched" for row in log_rows for cls in row["classes"]),
             "hindsight/selected_groups_with_positive": sum("positive" in row["classes"] for row in log_rows),
         }
-        if self.relabel_mode == "per_sample_split":
+        if self.relabel_mode.startswith("per_sample_split"):
             for cls in ("positive", "negative_valid", "negative_parse", "negative_arithmetic", "negative_usage"):
                 metrics[f"hindsight/pooled_{cls}_samples"] = sum(c == cls for _, c, _, _ in pooled) if pool_built else 0
         return plan, log_rows, metrics
@@ -354,6 +368,43 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
         with open(os.path.join(self.relabel_log_dir, f"{global_steps}.jsonl"), "w") as log_file:
             for row in log_rows:
                 log_file.write(json.dumps(row) + "\n")
+
+    @staticmethod
+    def _replace_positive_old_log_probs(pending, shadow_log_probs, real_data):
+        """Arm G: use the original-prompt per-token log probs as old_log_probs of the relabeled positives.
+
+        real_keys[:num_relabeled] are exactly the prompt-changed samples (the positives); the rest are controls. Every other
+        sample in the batch is left untouched, which is checked by reading the whole batch's old_log_probs before and after.
+        """
+        num_relabeled = pending["num_relabeled"]
+        positive_keys = pending["real_keys"][:num_relabeled]
+        new_prompt_rows = [row.clone() for row in real_data["old_log_probs"].unbind(0)[:num_relabeled]]
+        original_prompt_rows = [row.to(new_prompt_rows[0].dtype).clone() for row in shadow_log_probs.unbind(0)[:num_relabeled]]
+        masks = [mask.bool() for mask in real_data["response_mask"].unbind(0)[:num_relabeled]]
+        ratios = torch.cat([torch.exp(new - original)[mask] for new, original, mask in zip(new_prompt_rows, original_prompt_rows, masks)])
+
+        all_keys = list(pending["batch_keys"])
+        before = tq.kv_batch_get(keys=all_keys, partition_id=pending["partition_id"], select_fields=["old_log_probs"])["old_log_probs"].unbind(0)
+        before = [row.clone() for row in before]
+        replacement = torch.nested.as_nested_tensor(original_prompt_rows, layout=torch.jagged)
+        tq.kv_batch_put(keys=positive_keys, partition_id=pending["partition_id"], fields=TensorDict({"old_log_probs": replacement}, batch_size=num_relabeled))
+        after = tq.kv_batch_get(keys=all_keys, partition_id=pending["partition_id"], select_fields=["old_log_probs"])["old_log_probs"].unbind(0)
+
+        positive_key_set = set(positive_keys)
+        changed_keys = {key for key, old_row, new_row in zip(all_keys, before, after) if not torch.equal(old_row, new_row)}
+        max_abs_error = max(float((after[all_keys.index(key)] - row).abs().max()) for key, row in zip(positive_keys, original_prompt_rows))
+        if not changed_keys <= positive_key_set or max_abs_error != 0.0:
+            raise RuntimeError(f"orig_ratio write-back failed: changed non-positive keys {changed_keys - positive_key_set}, max error {max_abs_error}")
+        return {
+            "hindsight/orig_ratio_positive_tokens": int(ratios.numel()),
+            "hindsight/orig_ratio_below_0.8_token_rate": float((ratios < 0.8).float().mean()),
+            "hindsight/orig_ratio_0.8_to_1.2_token_rate": float(((ratios >= 0.8) & (ratios <= 1.2)).float().mean()),
+            "hindsight/orig_ratio_above_1.2_token_rate": float((ratios > 1.2).float().mean()),
+            "hindsight/orig_ratio_replaced_samples": len(positive_keys),
+            "hindsight/orig_ratio_changed_samples": len(changed_keys),
+            "hindsight/orig_ratio_unchanged_other_samples": len(all_keys) - len(changed_keys),
+            "hindsight/orig_ratio_writeback_max_abs_error": max_abs_error,
+        }
 
     @staticmethod
     def _masked_sums(log_probs, response_mask):
@@ -418,6 +469,10 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             "hindsight/control_samples": len(control_sum_diffs),
             "hindsight/diagnostic_seconds": time.time() - start_time,
         }
+        if self.relabel_mode == "per_sample_split_orig_ratio":
+            if max(control_token_diffs) > MAX_CONTROL_TOKEN_DIFF_FOR_ORIG_RATIO:
+                raise RuntimeError(f"orig_ratio: control samples disagree by {max(control_token_diffs)} nats per token; refusing to replace old_log_probs")
+            diagnostic_metrics.update(self._replace_positive_old_log_probs(pending, shadow_log_probs, real_data))
         metrics.update(diagnostic_metrics)
         with open(os.path.join(self.relabel_log_dir, "diagnostic_summary.jsonl"), "a") as summary_file:
             strict_json_metrics = {key: (None if isinstance(value, float) and value != value else value) for key, value in diagnostic_metrics.items()}
