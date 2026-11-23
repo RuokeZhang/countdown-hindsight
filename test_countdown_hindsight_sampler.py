@@ -371,7 +371,10 @@ class TestHindsightSamplerTransferQueue(unittest.TestCase):
         tq.kv_batch_put(keys=keys, partition_id="train", fields=list_of_dict_to_tensordict(samples), tags=tags)
         self.orig_ratio_sampler._relabel_batch(KVBatchMeta(partition_id="train", keys=keys, tags=tags), global_steps=11)
         metrics = {}
-        self.orig_ratio_sampler._run_logprob_diagnostic({}, metrics)
+        # The stored old_log_probs (-1.0) deliberately differ from the fake actor's (~-0.25) so replaced rows are recognizable;
+        # that also makes the controls disagree by ~0.6 nats per token, so the guard is relaxed here.
+        with mock.patch("countdown_hindsight_sampler.MAX_CONTROL_TOKEN_MEAN_ABS_DIFF_FOR_ORIG_RATIO", 1.0):
+            self.orig_ratio_sampler._run_logprob_diagnostic({}, metrics)
         row = json.loads(open(os.path.join(self.orig_ratio_log_dir, "11.jsonl")).readline())
         positive_keys = [key for key, cls in zip(row["keys"], row["classes"]) if cls == "positive"]
         self.assertTrue(positive_keys)

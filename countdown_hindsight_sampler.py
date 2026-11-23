@@ -29,8 +29,9 @@ from run_countdown_baseline import build_prompt
 PROMPT_VERSION = "v3"
 DIAGNOSTIC_PARTITION = "hindsight_diag"
 SMALL_LOGP_DIFF = 0.05
-# Bf16 batch-composition noise between the two forwards was at most ~0.3 nats per token; a misaligned forward is far larger.
-MAX_CONTROL_TOKEN_DIFF_FOR_ORIG_RATIO = 1.5
+# Mean over all control tokens: a misaligned forward shows up as nats-per-token error everywhere, while bf16 batch-composition
+# noise is ~0 on average but can reach >1.5 nats on a single low-probability token (seen at arm G step 30).
+MAX_CONTROL_TOKEN_MEAN_ABS_DIFF_FOR_ORIG_RATIO = 0.2
 PER_SAMPLE_MODES = ("per_sample", "per_sample_split", "per_sample_split_keep_prompt", "per_sample_split_orig_ratio")
 
 
@@ -441,6 +442,9 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             for shadow, real in zip(shadow_log_probs.unbind(0)[num_relabeled:], real_data["old_log_probs"].unbind(0)[num_relabeled:])
         ]
         control_sum_diffs = [abs(s - r) for s, r in zip(shadow_sums[num_relabeled:], real_sums[num_relabeled:])]
+        control_rows = list(zip(shadow_log_probs.unbind(0), real_data["old_log_probs"].unbind(0), real_data["response_mask"].unbind(0)))[num_relabeled:]
+        control_abs_diff_total = sum(float(((shadow - real).abs() * mask).sum()) for shadow, real, mask in control_rows)
+        control_token_mean_abs_diff = control_abs_diff_total / max(sum(float(mask.sum()) for _, _, mask in control_rows), 1.0)
 
         logp_new, logp_orig = real_sums[:num_relabeled], shadow_sums[:num_relabeled]
         diffs = [new - orig for new, orig in zip(logp_new, logp_orig)]
@@ -466,12 +470,13 @@ class HindsightRelabelReplayBuffer(ReplayBuffer):
             "hindsight/logp_abs_diff_small_rate": sum(abs(d) < SMALL_LOGP_DIFF for d in diffs) / len(diffs),
             "hindsight/control_logp_sum_max_abs_diff": max(control_sum_diffs),
             "hindsight/control_logp_token_max_abs_diff": max(control_token_diffs),
+            "hindsight/control_logp_token_mean_abs_diff": control_token_mean_abs_diff,
             "hindsight/control_samples": len(control_sum_diffs),
             "hindsight/diagnostic_seconds": time.time() - start_time,
         }
         if self.relabel_mode == "per_sample_split_orig_ratio":
-            if max(control_token_diffs) > MAX_CONTROL_TOKEN_DIFF_FOR_ORIG_RATIO:
-                raise RuntimeError(f"orig_ratio: control samples disagree by {max(control_token_diffs)} nats per token; refusing to replace old_log_probs")
+            if control_token_mean_abs_diff > MAX_CONTROL_TOKEN_MEAN_ABS_DIFF_FOR_ORIG_RATIO:
+                raise RuntimeError(f"orig_ratio: control samples disagree by {control_token_mean_abs_diff} nats per token on average; refusing to replace old_log_probs")
             diagnostic_metrics.update(self._replace_positive_old_log_probs(pending, shadow_log_probs, real_data))
         metrics.update(diagnostic_metrics)
         with open(os.path.join(self.relabel_log_dir, "diagnostic_summary.jsonl"), "a") as summary_file:
