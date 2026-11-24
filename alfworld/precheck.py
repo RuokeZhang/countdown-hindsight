@@ -90,7 +90,8 @@ class AchievementTracker:
         full, half = [], []
         property_words = {"ishot": "hot", "iscool": "cool", "isclean": "clean"}
         for (obj, receptacle), props in sorted(self.placements.items()):
-            full.append(f"put {obj} in {receptacle}")
+            if ("inreceptacle", (obj, receptacle)) not in self.initial:   # a plain "put X back where it started" was already true at the start
+                full.append(f"put {obj} in {receptacle}")
             full += [f"put {property_words[p]} {obj} in {receptacle}" for p in sorted(props)]
         full += [f"put two {obj_type} in {receptacle}" for obj_type, receptacle in sorted(self.two_placed)]
         full += [f"examine {obj} with {lamp}" for obj, lamp in sorted(self.examined_in_light)]

@@ -3,7 +3,7 @@
 1. success rate; share of groups (8 episodes of one task) that all failed / are mixed / all succeeded
 2. among failed episodes: share with >= 1 achievement expressible as an ALFWorld task template ("full"),
    with only partial achievements ("half"), and with nothing
-3. among all-failed groups: whether the 8 episodes' achievement sets are all identical, partly different, all different
+3. among all-failed groups: whether the 8 episodes' achievement sets are all empty, identical (non-empty), partly different, all different
 4. end mode distribution and mean steps
 Also writes 10 failed trajectories (at least one per task type) as text.
 """
@@ -104,7 +104,7 @@ def main():
     for episode in episodes:
         for kind, agrees in episode["text_agrees_with_state"].items():
             agreement[kind] += agrees
-    lines += ["", "Achievements are read from the env state facts (diff against the initial state). Share of episodes where the "
+    lines += ["", "Achievements are read from the env state facts (placements: inreceptacle facts new vs the previous step; hot/cool/clean/lamp: new vs the initial state). Share of episodes where the "
               "feedback-text parse gives the same event set as the state, per event kind:", "",
               "| " + " | ".join(agreement) + " |", "|" + "---|" * len(agreement),
               "| " + " | ".join(share(agreement[k], len(episodes)) for k in agreement) + " |"]
