@@ -7,3 +7,4 @@ EXIT precheck 0 2026-11-24T04:48:35
 START precheck_report: python precheck_report.py --episodes /root/alf/precheck/episodes.jsonl --out_md /root/alf/precheck/precheck_summary.md --out_examples /root/alf/precheck/failed_trajectories.md 2026-11-24T04:48:35
 EXIT precheck_report 0 2026-11-24T04:48:36
 START baseline_seed0: bash run_alfworld_grpo_2gpu.sh grpo_alfworld_seed0 0 2026-11-24T04:48:37
+SEED1_DROPPED_BY_REQUEST (chain controller stopped; seed 0 keeps running) 2026-11-24T08:55:07
