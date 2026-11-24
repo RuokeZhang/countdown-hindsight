@@ -1,0 +1,13 @@
+{
+  "episodes": 1920,
+  "overlong_prompts": 0,
+  "seconds": 1973.5218510627747,
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 1,
+    "top_k": -1,
+    "max_tokens": 512
+  },
+  "max_steps": 50,
+  "history_length": 2
+}
