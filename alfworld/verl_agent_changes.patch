@@ -1,0 +1,235 @@
+diff --git a/agent_system/environments/env_manager.py b/agent_system/environments/env_manager.py
+index ab09dff..b85db5d 100644
+--- a/agent_system/environments/env_manager.py
++++ b/agent_system/environments/env_manager.py
+@@ -240,6 +240,14 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
+             if task in gamefile:
+                 success[f"{task}_success_rate"].append(won_value)
+                 break
++        # With eval_dataset=both, also report each validation split separately.
++        for split in ("valid_seen", "valid_unseen"):
++            if f"/{split}/" in gamefile:
++                success[f"{split}/success_rate"].append(won_value)
++                for task in tasks:
++                    if task in gamefile:
++                        success[f"{split}/{task}_success_rate"].append(won_value)
++                        break
+ 
+ 
+ class SokobanEnvironmentManager(EnvironmentManagerBase):
+@@ -637,7 +645,8 @@ def make_envs(config):
+             raise ValueError(f"Unsupported environment: {config.env.env_name}")
+ 
+         env_kwargs = {
+-            'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution' or 'eval_out_of_distribution'
++            'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution', 'eval_out_of_distribution' or 'both'
++            'train_data_path': config.env.alfworld.get('train_data_path'),  # restrict training games to this directory
+         }
+         _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
+         _val_envs = build_alfworld_envs(alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1, is_train=False, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
+diff --git a/agent_system/environments/env_package/alfworld/envs.py b/agent_system/environments/env_package/alfworld/envs.py
+index e72f621..72928c2 100644
+--- a/agent_system/environments/env_package/alfworld/envs.py
++++ b/agent_system/environments/env_package/alfworld/envs.py
+@@ -13,6 +13,7 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++import copy
+ import os
+ import yaml
+ import gymnasium as gym
+@@ -82,6 +83,37 @@ class AlfworldWorker:
+         image = image.cpu()  
+         return image
+ 
++
++class AlfworldGroupWorker:
++    """Ray actor holding several single-env ALFWorld instances, stepped one after another.
++
++    One Ray process per env costs 50-85 threads; with 128 train + 274 eval envs that exceeds the container's
++    7680-thread limit, so envs are packed several per actor. Env j uses base_envs[j] (its game list) and seeds[j].
++    """
++
++    def __init__(self, base_envs, seeds):
++        self.envs = []
++        for base_env, seed in zip(base_envs, seeds):
++            env = base_env.init_env(batch_size=1)
++            env.seed(seed)
++            self.envs.append(env)
++
++    def step(self, actions):
++        results = []
++        for env, action in zip(self.envs, actions):
++            obs, scores, dones, infos = env.step([action])
++            infos['observation_text'] = obs
++            results.append((obs, scores, dones, infos))
++        return results
++
++    def reset(self):
++        results = []
++        for env in self.envs:
++            obs, infos = env.reset()
++            infos['observation_text'] = obs
++            results.append((obs, infos))
++        return results
++
+ class AlfworldEnvs(gym.Env):
+     def __init__(self, alf_config_path, seed, env_num, group_n, resources_per_worker, is_train=True, env_kwargs={}):
+         super().__init__()
+@@ -92,18 +124,43 @@ class AlfworldEnvs(gym.Env):
+             
+         eval_dataset = env_kwargs.get('eval_dataset', 'eval_in_distribution')
+         config = load_config_file(alf_config_path)
++        if is_train and env_kwargs.get('train_data_path'):
++            config['dataset']['data_path'] = env_kwargs['train_data_path']
+         env_type = config['env']['type']
+-        base_env = get_environment(env_type)(config, train_eval='train' if is_train else eval_dataset)
+         self.multi_modal = (env_type == 'AlfredThorEnv')
+         self.num_processes = env_num * group_n
+         self.group_n = group_n
+ 
+-        # Create Ray remote actors instead of processes
+-        env_worker = ray.remote(**resources_per_worker)(AlfworldWorker)
++        if is_train:
++            # Same games and seeds as the original one-env-per-actor layout: env i is seeded with seed + i // group_n.
++            base_env = get_environment(env_type)(config, train_eval='train')
++            base_envs = [base_env] * self.num_processes
++            envs_per_worker = group_n
++        elif eval_dataset == 'both':
++            # Every valid_seen and valid_unseen game exactly once: env i always plays game i.
++            games = []
++            for split in ('eval_in_distribution', 'eval_out_of_distribution'):
++                games += get_environment(env_type)(config, train_eval=split).game_files
++            assert len(games) == self.num_processes, f"val_batch_size must equal the {len(games)} valid_seen + valid_unseen games"
++            base_env = get_environment(env_type)(config, train_eval='eval_in_distribution')
++            base_envs = []
++            for game in games:
++                single_game_env = copy.copy(base_env)
++                single_game_env.game_files = [game]
++                single_game_env.num_games = 1
++                base_envs.append(single_game_env)
++            envs_per_worker = env_kwargs.get('eval_envs_per_worker', 10)
++        else:
++            base_env = get_environment(env_type)(config, train_eval=eval_dataset)
++            base_envs = [base_env] * self.num_processes
++            envs_per_worker = env_kwargs.get('eval_envs_per_worker', 10)
++
++        env_worker = ray.remote(**resources_per_worker)(AlfworldGroupWorker)
+         self.workers = []
+-        for i in range(self.num_processes):
+-            worker = env_worker.remote(config, seed + (i // self.group_n), base_env)
+-            self.workers.append(worker)
++        for start in range(0, self.num_processes, envs_per_worker):
++            indices = range(start, min(start + envs_per_worker, self.num_processes))
++            self.workers.append(env_worker.remote([base_envs[i] for i in indices], [seed + (i // self.group_n) for i in indices]))
++        self.worker_sizes = [min(envs_per_worker, self.num_processes - start) for start in range(0, self.num_processes, envs_per_worker)]
+ 
+         self.prev_admissible_commands = [None for _ in range(self.num_processes)]
+ 
+@@ -113,9 +170,10 @@ class AlfworldEnvs(gym.Env):
+ 
+         # Send step commands to all workers
+         futures = []
+-        for i, worker in enumerate(self.workers):
+-            future = worker.step.remote(actions[i])
+-            futures.append(future)
++        start = 0
++        for worker, size in zip(self.workers, self.worker_sizes):
++            futures.append(worker.step.remote(actions[start:start + size]))
++            start += size
+ 
+         # Collect results
+         text_obs_list = []
+@@ -124,7 +182,7 @@ class AlfworldEnvs(gym.Env):
+         dones_list = []
+         info_list = []
+ 
+-        results = ray.get(futures)
++        results = [result for worker_results in ray.get(futures) for result in worker_results]
+         for i, (obs, scores, dones, info) in enumerate(results):
+             for k in info.keys():
+                 info[k] = info[k][0]
+@@ -158,7 +216,7 @@ class AlfworldEnvs(gym.Env):
+             futures.append(future)
+ 
+         # Collect results
+-        results = ray.get(futures)
++        results = [result for worker_results in ray.get(futures) for result in worker_results]
+         for i, (obs, info) in enumerate(results):
+             for k in info.keys():
+                 info[k] = info[k][0] 
+diff --git a/verl/trainer/config/ppo_trainer.yaml b/verl/trainer/config/ppo_trainer.yaml
+index d0f68ba..305b1c7 100644
+--- a/verl/trainer/config/ppo_trainer.yaml
++++ b/verl/trainer/config/ppo_trainer.yaml
+@@ -301,6 +301,7 @@ env:
+     n: 1 # the group number of envs (for GRPO and GiGPO).
+   alfworld:
+     eval_dataset: eval_in_distribution
++    train_data_path: null
+   search:
+     log_requests: false
+     search_url: "http://127.0.0.1:8000/retrieve" # also support multiple urls: ["http://127.0.0.1:8000/retrieve", "http://127.0.0.1:8001/retrieve"]
+diff --git a/verl/trainer/ppo/ray_trainer.py b/verl/trainer/ppo/ray_trainer.py
+index d85e23a..e7a2cba 100644
+--- a/verl/trainer/ppo/ray_trainer.py
++++ b/verl/trainer/ppo/ray_trainer.py
+@@ -67,6 +67,33 @@ from agent_system.multi_turn_rollout import TrajectoryCollector, adjust_batch
+ WorkerType = Type[Worker]
+ 
+ 
++
++def compute_group_outcome_metrics(batch: DataProto) -> dict:
++    """Share of GRPO groups (same uid) whose episodes all failed, mixed, or all succeeded; success = episode reward > 0."""
++    episode_won = {}
++    for uid, traj_uid, episode_reward in zip(batch.non_tensor_batch["uid"], batch.non_tensor_batch["traj_uid"], batch.non_tensor_batch["episode_rewards"]):
++        episode_won[traj_uid] = (uid, float(episode_reward) > 0)
++    wins_by_group = defaultdict(list)
++    for uid, won in episode_won.values():
++        wins_by_group[uid].append(won)
++    groups = list(wins_by_group.values())
++    return {
++        "groups/count": len(groups),
++        "groups/episodes": len(episode_won),
++        "groups/episode_success_rate": float(np.mean([won for _, won in episode_won.values()])),
++        "groups/all_fail_rate": float(np.mean([not any(wins) for wins in groups])),
++        "groups/mixed_rate": float(np.mean([any(wins) and not all(wins) for wins in groups])),
++        "groups/all_success_rate": float(np.mean([all(wins) for wins in groups])),
++    }
++
++
++def append_metrics_jsonl(metrics: dict, step: int) -> None:
++    """Also write each logged step to $METRICS_JSONL (one JSON object per line), if set."""
++    path = os.environ.get("METRICS_JSONL")
++    if path:
++        with open(path, "a") as metrics_file:
++            metrics_file.write(json.dumps({"step": step, "data": {key: float(value) for key, value in metrics.items() if np.isscalar(value)}}) + "\n")
++
+ class Role(Enum):
+     """
+     To create more roles dynamically, you can subclass Role and add new members
+@@ -1034,6 +1061,7 @@ class RayPPOTrainer:
+             assert val_metrics, f"{val_metrics=}"
+             pprint(f"Initial validation metrics: {val_metrics}")
+             logger.log(data=val_metrics, step=self.global_steps)
++            append_metrics_jsonl(val_metrics, self.global_steps)
+             if self.config.trainer.get("val_only", False):
+                 return
+ 
+@@ -1107,6 +1135,7 @@ class RayPPOTrainer:
+                     # batch = batch.union(gen_batch_output)
+                     del batch
+                     batch = gen_batch_output
++                    metrics.update(compute_group_outcome_metrics(batch))
+ 
+                     if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
+                         step_rewards_tensor = core_gigpo.compute_step_discounted_returns(
+@@ -1295,6 +1324,7 @@ class RayPPOTrainer:
+ 
+                 # TODO: make a canonical logger that supports various backend
+                 logger.log(data=metrics, step=self.global_steps)
++                append_metrics_jsonl(metrics, self.global_steps)
+ 
+                 progress_bar.update(1)
+                 self.global_steps += 1
