@@ -44,7 +44,9 @@ def goals_of(episode):
         else:                                           # put <obj> <n> in <recep> <n>
             in_index = words.index("in")
             goals.add(("put", type_of(" ".join(words[1:in_index])), type_of(" ".join(words[in_index + 1:]))))
-    return goals
+    # "put two" recorded by a put-back (X taken out of R and returned while another X was there) was already true at the
+    # start; keep it only if some placement of that type into that receptacle was not a put-back (a plain "put" goal).
+    return {goal for goal in goals if goal[0] != "two" or ("put", goal[1], goal[2]) in goals}
 
 
 def goal_text(goal):
