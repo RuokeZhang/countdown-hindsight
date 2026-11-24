@@ -63,7 +63,7 @@ class AchievementTracker:
                 obj, receptacle = args
                 self.placements.setdefault(args, set()).update(p for p in ("ishot", "iscool", "isclean") if obj in properties[p])
                 same_type_inside = {other[0] for n, other in current if n == "inreceptacle" and other[1] == receptacle and object_type(other[0]) == object_type(obj)}
-                if len(same_type_inside) >= 2 and args not in self.initial:   # a put-back cannot complete "put two"
+                if len(same_type_inside) >= 2 and ("inreceptacle", args) not in self.initial:   # a put-back cannot complete "put two"
                     self.two_placed.add((object_type(obj), receptacle))
         for name, args in current - self.initial:
             if name == "ishot":

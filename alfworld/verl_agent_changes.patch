@@ -1,8 +1,18 @@
 diff --git a/agent_system/environments/env_manager.py b/agent_system/environments/env_manager.py
-index ab09dff..92f4a24 100644
+index ab09dff..5b77ad1 100644
 --- a/agent_system/environments/env_manager.py
 +++ b/agent_system/environments/env_manager.py
-@@ -240,6 +240,14 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
+@@ -131,6 +131,9 @@ class SearchEnvironmentManager(EnvironmentManagerBase):
+             
+ 
+ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
++    def episode_records(self):
++        return self.envs.episode_records()
++
+     def __init__(self, envs, projection_f, config):
+         self.memory = SimpleMemory()
+         super().__init__(envs, projection_f, config)
+@@ -240,6 +243,14 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
              if task in gamefile:
                  success[f"{task}_success_rate"].append(won_value)
                  break
@@ -17,7 +27,7 @@ index ab09dff..92f4a24 100644
  
  
  class SokobanEnvironmentManager(EnvironmentManagerBase):
-@@ -637,7 +645,10 @@ def make_envs(config):
+@@ -637,7 +648,11 @@ def make_envs(config):
              raise ValueError(f"Unsupported environment: {config.env.env_name}")
  
          env_kwargs = {
@@ -26,11 +36,12 @@ index ab09dff..92f4a24 100644
 +            'train_data_path': config.env.alfworld.get('train_data_path'),  # restrict training games to this directory
 +            'train_envs_per_worker': config.env.alfworld.get('train_envs_per_worker'),  # envs per Ray actor (default: one group)
 +            'eval_envs_per_worker': config.env.alfworld.get('eval_envs_per_worker') or 10,
++            'hindsight': bool(config.env.get('hindsight', {}).get('enable', False)),  # track achievements in train envs
          }
          _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
          _val_envs = build_alfworld_envs(alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1, is_train=False, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
 diff --git a/agent_system/environments/env_package/alfworld/envs.py b/agent_system/environments/env_package/alfworld/envs.py
-index e72f621..f1e652e 100644
+index e72f621..885505e 100644
 --- a/agent_system/environments/env_package/alfworld/envs.py
 +++ b/agent_system/environments/env_package/alfworld/envs.py
 @@ -13,6 +13,7 @@
@@ -41,7 +52,15 @@ index e72f621..f1e652e 100644
  import os
  import yaml
  import gymnasium as gym
-@@ -82,6 +83,37 @@ class AlfworldWorker:
+@@ -23,6 +24,7 @@ import torchvision.transforms as T
+ import ray
+ 
+ from agent_system.environments.env_package.alfworld.alfworld.agents.environment import get_environment
++from agent_system.environments.env_package.alfworld.hindsight import AchievementTracker
+ 
+ ALF_ACTION_LIST=["pass", "goto", "pick", "put", "open", "close", "toggle", "heat", "clean", "cool", "slice", "inventory", "examine", "look"]
+ # ALF_ITEM_LIST =
+@@ -82,6 +84,61 @@ class AlfworldWorker:
          image = image.cpu()  
          return image
  
@@ -53,33 +72,57 @@ index e72f621..f1e652e 100644
 +    7680-thread limit, so envs are packed several per actor. Env j uses base_envs[j] (its game list) and seeds[j].
 +    """
 +
-+    def __init__(self, base_envs, seeds):
++    def __init__(self, base_envs, seeds, track_achievements=False):
++        # track_achievements (hindsight training): request TextWorld state facts and record per episode the achieved
++        # ALFWorld goals and the executed (action, feedback) steps; the facts never leave the actor.
++        self.track_achievements = track_achievements
++        if track_achievements:
++            import textworld
++            original_env_infos = textworld.EnvInfos
++
++            def env_infos_with_facts(*args, **kwargs):
++                kwargs["facts"] = True
++                return original_env_infos(*args, **kwargs)
++
++            textworld.EnvInfos = env_infos_with_facts
 +        self.envs = []
 +        for base_env, seed in zip(base_envs, seeds):
 +            env = base_env.init_env(batch_size=1)
 +            env.seed(seed)
 +            self.envs.append(env)
++        if track_achievements:
++            textworld.EnvInfos = original_env_infos
++        self.trackers = [None] * len(self.envs)
 +
 +    def step(self, actions):
 +        results = []
-+        for env, action in zip(self.envs, actions):
++        for index, (env, action) in enumerate(zip(self.envs, actions)):
 +            obs, scores, dones, infos = env.step([action])
++            if self.track_achievements:
++                tracker = self.trackers[index]
++                tracker.update(infos.pop('facts')[0], action, obs[0])
++                tracker.done = tracker.done or bool(dones[0])
 +            infos['observation_text'] = obs
 +            results.append((obs, scores, dones, infos))
 +        return results
 +
 +    def reset(self):
 +        results = []
-+        for env in self.envs:
++        for index, env in enumerate(self.envs):
 +            obs, infos = env.reset()
++            if self.track_achievements:
++                self.trackers[index] = AchievementTracker(infos.pop('facts')[0])
 +            infos['observation_text'] = obs
 +            results.append((obs, infos))
 +        return results
 +
++    def records(self):
++        return [tracker.record() for tracker in self.trackers]
++
  class AlfworldEnvs(gym.Env):
      def __init__(self, alf_config_path, seed, env_num, group_n, resources_per_worker, is_train=True, env_kwargs={}):
          super().__init__()
-@@ -92,18 +124,43 @@ class AlfworldEnvs(gym.Env):
+@@ -92,18 +149,44 @@ class AlfworldEnvs(gym.Env):
              
          eval_dataset = env_kwargs.get('eval_dataset', 'eval_in_distribution')
          config = load_config_file(alf_config_path)
@@ -118,18 +161,19 @@ index e72f621..f1e652e 100644
 +            envs_per_worker = env_kwargs.get('eval_envs_per_worker', 10)
 +
 +        env_worker = ray.remote(**resources_per_worker)(AlfworldGroupWorker)
++        track_achievements = bool(is_train and env_kwargs.get('hindsight'))
          self.workers = []
 -        for i in range(self.num_processes):
 -            worker = env_worker.remote(config, seed + (i // self.group_n), base_env)
 -            self.workers.append(worker)
 +        for start in range(0, self.num_processes, envs_per_worker):
 +            indices = range(start, min(start + envs_per_worker, self.num_processes))
-+            self.workers.append(env_worker.remote([base_envs[i] for i in indices], [seed + (i // self.group_n) for i in indices]))
++            self.workers.append(env_worker.remote([base_envs[i] for i in indices], [seed + (i // self.group_n) for i in indices], track_achievements))
 +        self.worker_sizes = [min(envs_per_worker, self.num_processes - start) for start in range(0, self.num_processes, envs_per_worker)]
  
          self.prev_admissible_commands = [None for _ in range(self.num_processes)]
  
-@@ -113,9 +170,10 @@ class AlfworldEnvs(gym.Env):
+@@ -113,9 +196,10 @@ class AlfworldEnvs(gym.Env):
  
          # Send step commands to all workers
          futures = []
@@ -143,7 +187,7 @@ index e72f621..f1e652e 100644
  
          # Collect results
          text_obs_list = []
-@@ -124,7 +182,7 @@ class AlfworldEnvs(gym.Env):
+@@ -124,7 +208,7 @@ class AlfworldEnvs(gym.Env):
          dones_list = []
          info_list = []
  
@@ -152,7 +196,7 @@ index e72f621..f1e652e 100644
          for i, (obs, scores, dones, info) in enumerate(results):
              for k in info.keys():
                  info[k] = info[k][0]
-@@ -158,7 +216,7 @@ class AlfworldEnvs(gym.Env):
+@@ -158,7 +242,7 @@ class AlfworldEnvs(gym.Env):
              futures.append(future)
  
          # Collect results
@@ -161,11 +205,34 @@ index e72f621..f1e652e 100644
          for i, (obs, info) in enumerate(results):
              for k in info.keys():
                  info[k] = info[k][0] 
+@@ -186,6 +270,10 @@ class AlfworldEnvs(gym.Env):
+         images = ray.get(futures)
+         return images
+ 
++    def episode_records(self):
++        """Per env (in env order): {"goals": achieved type-level goals, "trajectory": [(executed action, feedback)]}."""
++        return [record for worker_records in ray.get([worker.records.remote() for worker in self.workers]) for record in worker_records]
++
+     @property
+     def get_admissible_commands(self):
+         """
 diff --git a/agent_system/multi_turn_rollout/rollout_loop.py b/agent_system/multi_turn_rollout/rollout_loop.py
-index d79e678..dab91a0 100644
+index d79e678..c529700 100644
 --- a/agent_system/multi_turn_rollout/rollout_loop.py
 +++ b/agent_system/multi_turn_rollout/rollout_loop.py
-@@ -350,10 +350,18 @@ class TrajectoryCollector:
+@@ -21,7 +21,11 @@ from verl.utils.model import compute_position_id_with_mask
+ import verl.utils.torch_functional as verl_F
+ from transformers import PreTrainedTokenizer
+ import uuid
++import json
++import time
++from collections import defaultdict
+ from agent_system.multi_turn_rollout.utils import process_image, to_list_of_dict, torch_to_numpy, filter_group_data
++from agent_system.environments.env_package.alfworld.hindsight import plan_relabels, action_token_mask
+ from agent_system.environments import EnvironmentManagerBase
+ from typing import List, Dict
+ from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
+@@ -350,10 +354,18 @@ class TrajectoryCollector:
              batch_input.meta_info = gen_batch.meta_info
  
              # pad to be divisible by dp_size
@@ -186,19 +253,134 @@ index d79e678..dab91a0 100644
  
              batch.non_tensor_batch['uid'] = uid_batch
              batch.non_tensor_batch['traj_uid'] = traj_uid
+@@ -481,6 +493,96 @@ class TrajectoryCollector:
+ 
+         return total_batch_list, total_episode_rewards, total_episode_lengths, total_success, total_traj_uid, total_tool_callings
+ 
++    def relabel_row(self, row, task, instruction):
++        """A copy of one turn's row whose prompt has the task description replaced by the hindsight instruction; the
++        response tokens are unchanged. None if the task text is not in the prompt or the new prompt is too long."""
++        prompt_length = row["prompts"].shape[0]
++        prompt_mask = row["attention_mask"][:prompt_length].bool()
++        prompt_text = self.tokenizer.decode(row["prompts"][prompt_mask], skip_special_tokens=False)
++        if task not in prompt_text:
++            return None
++        new_text = prompt_text.replace(task, instruction)
++        try:
++            input_ids, attention_mask = verl_F.tokenize_and_postprocess_data(prompt=new_text, tokenizer=self.tokenizer, max_length=prompt_length,
++                                                                             pad_token_id=self.tokenizer.pad_token_id, left_pad=True, truncation="error")
++        except (RuntimeError, AssertionError, NotImplementedError):
++            return None
++        new_row = dict(row)
++        full_attention = torch.cat([attention_mask[0], row["attention_mask"][prompt_length:]])
++        new_row["prompts"] = input_ids[0]
++        new_row["input_ids"] = torch.cat([input_ids[0], row["responses"]])
++        new_row["attention_mask"] = full_attention
++        new_row["position_ids"] = compute_position_id_with_mask(full_attention.unsqueeze(0))[0]
++        if "raw_prompt_ids" in row:  # popped for generation, so normally absent from the stored rows
++            new_row["raw_prompt_ids"] = input_ids[0][attention_mask[0].bool()].tolist()
++        if "raw_prompt" in row:
++            new_row["raw_prompt"] = [dict(message, content=message["content"].replace(task, instruction)) for message in row["raw_prompt"]]
++        response_mask = row["attention_mask"][prompt_length:].bool()
++        valid_response = row["responses"][response_mask].tolist()
++        action = action_token_mask(valid_response, self.tokenizer)
++        new_row["action_mask"] = torch.zeros_like(row["responses"], dtype=torch.float32)
++        new_row["action_mask"][: len(action)] = torch.tensor(action, dtype=torch.float32)
++        return new_row
++
++    def add_hindsight_rows(self, total_batch_list, episode_rewards, episode_lengths, traj_uid, tool_callings, envs, hindsight_config):
++        """Relabel all-failed groups (see agent_system/environments/env_package/alfworld/hindsight.py) and append one
++        hindsight episode per original episode of each relabeled group: same responses, prompts with the new goal, a new
++        uid per relabeled group, reward 10 x won-under-the-new-goal (the env's scale). Every row gets row_key, hindsight,
++        behavior_row_key and action_mask so the trainer can swap in behavior log probs and mask hindsight rows."""
++        self.hindsight_rollouts = getattr(self, "hindsight_rollouts", 0) + 1
++        started = time.time()
++        for rows in total_batch_list:
++            for turn, row in enumerate(rows):
++                row["row_key"] = f"{row['traj_uid']}:{turn}"
++                row["hindsight"] = False
++                row["behavior_row_key"] = ""
++                row["action_mask"] = torch.ones_like(row["responses"], dtype=torch.float32)
++        env_count = len(total_batch_list)
++        groups = defaultdict(list)
++        for env in range(env_count):
++            groups[total_batch_list[env][0]["uid"]].append(env)
++        dead_groups = {uid: members for uid, members in groups.items() if not any(episode_rewards[env] > 0 for env in members)}
++        plans, log, metrics = plan_relabels(dead_groups, envs.episode_records(), envs.tasks,
++                                            seed_text=f"{hindsight_config.get('seed', 0)}:{self.hindsight_rollouts}",
++                                            max_workers=hindsight_config.get("llm_workers", 16))
++        new_rows, new_rewards, new_lengths, new_traj, new_tools = [], [], [], [], []
++        skipped_rows = 0
++        for uid, plan in plans.items():
++            hindsight_uid = str(uuid.uuid4())
++            for env, reward, goal_step in zip(groups[uid], plan["rewards"], plan["goal_steps"]):
++                copy_traj = str(uuid.uuid4())
++                rows = []
++                active_rows = [row for row in total_batch_list[env] if row["active_masks"]]
++                if reward and goal_step:
++                    # under g' the env would have ended the episode at the step that achieved it
++                    active_rows = active_rows[:goal_step]
++                for row in active_rows:
++                    new_row = self.relabel_row(row, envs.tasks[env], plan["instruction"])
++                    if new_row is None:
++                        skipped_rows += 1
++                        continue
++                    new_row.update({"uid": hindsight_uid, "traj_uid": copy_traj, "hindsight": True,
++                                    "behavior_row_key": row["row_key"], "row_key": f"{copy_traj}:{len(rows)}"})
++                    rows.append(new_row)
++                if rows:
++                    new_rows.append(rows)
++                    new_rewards.append(10.0 * reward)
++                    new_lengths.append(len(rows))
++                    new_traj.append(copy_traj)
++                    new_tools.append(tool_callings[env])
++        metrics.update({"hindsight/rows": sum(len(rows) for rows in new_rows), "hindsight/skipped_rows": skipped_rows,
++                        "hindsight/episodes": len(new_rows), "hindsight/seconds": time.time() - started})
++        self.last_hindsight_metrics = metrics
++        if hindsight_config.get("log_path"):
++            with open(hindsight_config["log_path"], "a") as log_file:
++                log_file.write(json.dumps({"rollout": self.hindsight_rollouts, "metrics": metrics, "groups": log}, default=str) + "\n")
++        if not new_rows:
++            return total_batch_list, episode_rewards, episode_lengths, traj_uid, tool_callings
++        return (total_batch_list + new_rows, np.concatenate([episode_rewards, np.array(new_rewards, dtype=episode_rewards.dtype)]),
++                np.concatenate([episode_lengths, np.array(new_lengths, dtype=episode_lengths.dtype)]),
++                np.concatenate([traj_uid, np.array(new_traj, dtype=object)]),
++                np.concatenate([tool_callings, np.array(new_tools, dtype=tool_callings.dtype)]))
++
+     def multi_turn_loop(
+             self,
+             gen_batch: DataProto, 
+@@ -524,6 +626,10 @@ class TrajectoryCollector:
+         assert len(total_batch_list) == len(total_episode_lengths)
+         assert len(total_batch_list) == len(total_traj_uid)
+         assert len(total_batch_list) == len(totoal_tool_callings)
++        hindsight_config = self.config.env.get("hindsight", None)
++        if is_train and hindsight_config is not None and hindsight_config.get("enable", False):
++            total_batch_list, total_episode_rewards, total_episode_lengths, total_traj_uid, totoal_tool_callings = self.add_hindsight_rows(
++                total_batch_list, total_episode_rewards, total_episode_lengths, total_traj_uid, totoal_tool_callings, envs, hindsight_config)
+         
+ 
+         # Create trajectory data
 diff --git a/verl/trainer/config/ppo_trainer.yaml b/verl/trainer/config/ppo_trainer.yaml
-index d0f68ba..947ca48 100644
+index d0f68ba..0073019 100644
 --- a/verl/trainer/config/ppo_trainer.yaml
 +++ b/verl/trainer/config/ppo_trainer.yaml
-@@ -293,6 +293,7 @@ env:
+@@ -293,6 +293,14 @@ env:
    env_name: alfworld/AlfredTWEnv
    seed: 0
    max_steps: 50
 +  skip_finished_generation: false
++  hindsight:                     # online relabel of all-failed groups (alfworld only)
++    enable: false
++    ratio_reference: behavior    # behavior: old log probs of hindsight rows = original-prompt ones (LfH); relabeled: recomputed under g'
++    action_only_mask: true       # hindsight rows train only the <action>...</action> tokens
++    seed: 0
++    llm_workers: 48
++    log_path: null               # jsonl with every step's relabel decisions
    history_length: 2
    resources_per_worker: # resources for each env worker
      num_cpus: 0.1
-@@ -301,6 +302,9 @@ env:
+@@ -301,6 +309,9 @@ env:
      n: 1 # the group number of envs (for GRPO and GiGPO).
    alfworld:
      eval_dataset: eval_in_distribution
@@ -209,10 +391,10 @@ index d0f68ba..947ca48 100644
      log_requests: false
      search_url: "http://127.0.0.1:8000/retrieve" # also support multiple urls: ["http://127.0.0.1:8000/retrieve", "http://127.0.0.1:8001/retrieve"]
 diff --git a/verl/trainer/ppo/ray_trainer.py b/verl/trainer/ppo/ray_trainer.py
-index d85e23a..e7a2cba 100644
+index d85e23a..f13933f 100644
 --- a/verl/trainer/ppo/ray_trainer.py
 +++ b/verl/trainer/ppo/ray_trainer.py
-@@ -67,6 +67,33 @@ from agent_system.multi_turn_rollout import TrajectoryCollector, adjust_batch
+@@ -67,6 +67,56 @@ from agent_system.multi_turn_rollout import TrajectoryCollector, adjust_batch
  WorkerType = Type[Worker]
  
  
@@ -220,7 +402,10 @@ index d85e23a..e7a2cba 100644
 +def compute_group_outcome_metrics(batch: DataProto) -> dict:
 +    """Share of GRPO groups (same uid) whose episodes all failed, mixed, or all succeeded; success = episode reward > 0."""
 +    episode_won = {}
-+    for uid, traj_uid, episode_reward in zip(batch.non_tensor_batch["uid"], batch.non_tensor_batch["traj_uid"], batch.non_tensor_batch["episode_rewards"]):
++    hindsight = batch.non_tensor_batch.get("hindsight", np.zeros(len(batch), dtype=bool))
++    for uid, traj_uid, episode_reward, is_hindsight in zip(batch.non_tensor_batch["uid"], batch.non_tensor_batch["traj_uid"], batch.non_tensor_batch["episode_rewards"], hindsight):
++        if is_hindsight:  # original episodes only
++            continue
 +        episode_won[traj_uid] = (uid, float(episode_reward) > 0)
 +    wins_by_group = defaultdict(list)
 +    for uid, won in episode_won.values():
@@ -236,6 +421,26 @@ index d85e23a..e7a2cba 100644
 +    }
 +
 +
++def apply_behavior_log_probs(batch: DataProto, ratio_reference: str) -> dict:
++    """Hindsight rows: log the ratio pi_old(a | o, g') / pi_behavior(a | o, g) over their trained tokens and, for the
++    'behavior' reference (LfH), use the original row's old log probs as their PPO denominator."""
++    non_tensor = batch.non_tensor_batch
++    is_hindsight = non_tensor["hindsight"].astype(bool)
++    index_of = {key: i for i, (key, flag) in enumerate(zip(non_tensor["row_key"], is_hindsight)) if not flag}
++    hindsight_rows = np.nonzero(is_hindsight)[0]
++    source_rows = np.array([index_of[key] for key in non_tensor["behavior_row_key"][hindsight_rows]])
++    old = batch.batch["old_log_probs"]
++    mask = batch.batch["response_mask"][hindsight_rows].bool()
++    ratio = torch.exp(old[hindsight_rows] - old[source_rows])[mask]
++    metrics = {"hindsight/trained_tokens": int(mask.sum()),
++               "hindsight/ratio_below_0.8": float((ratio < 0.8).float().mean()) if ratio.numel() else 0.0,
++               "hindsight/ratio_0.8_to_1.2": float(((ratio >= 0.8) & (ratio <= 1.2)).float().mean()) if ratio.numel() else 0.0,
++               "hindsight/ratio_above_1.2": float((ratio > 1.2).float().mean()) if ratio.numel() else 0.0}
++    if ratio_reference == "behavior":
++        old[hindsight_rows] = old[source_rows]
++    return metrics
++
++
 +def append_metrics_jsonl(metrics: dict, step: int) -> None:
 +    """Also write each logged step to $METRICS_JSONL (one JSON object per line), if set."""
 +    path = os.environ.get("METRICS_JSONL")
@@ -246,7 +451,7 @@ index d85e23a..e7a2cba 100644
  class Role(Enum):
      """
      To create more roles dynamically, you can subclass Role and add new members
-@@ -1034,6 +1061,7 @@ class RayPPOTrainer:
+@@ -1034,6 +1084,7 @@ class RayPPOTrainer:
              assert val_metrics, f"{val_metrics=}"
              pprint(f"Initial validation metrics: {val_metrics}")
              logger.log(data=val_metrics, step=self.global_steps)
@@ -254,15 +459,54 @@ index d85e23a..e7a2cba 100644
              if self.config.trainer.get("val_only", False):
                  return
  
-@@ -1107,6 +1135,7 @@ class RayPPOTrainer:
+@@ -1107,6 +1158,8 @@ class RayPPOTrainer:
                      # batch = batch.union(gen_batch_output)
                      del batch
                      batch = gen_batch_output
 +                    metrics.update(compute_group_outcome_metrics(batch))
++                    metrics.update(getattr(self.traj_collector, "last_hindsight_metrics", {}))
  
                      if self.config.algorithm.adv_estimator == AdvantageEstimator.GiGPO:
                          step_rewards_tensor = core_gigpo.compute_step_discounted_returns(
-@@ -1295,6 +1324,7 @@ class RayPPOTrainer:
+@@ -1118,6 +1171,13 @@ class RayPPOTrainer:
+                     batch = adjust_batch(self.config, batch)
+ 
+                     batch.batch["response_mask"] = compute_response_mask(batch)
++                    hindsight_config = self.config.env.get("hindsight", {})
++                    if "hindsight" in batch.non_tensor_batch and hindsight_config.get("action_only_mask", True):
++                        # hindsight rows train only their <action>...</action> tokens; original rows keep the full response
++                        is_hindsight = torch.from_numpy(batch.non_tensor_batch["hindsight"].astype(bool))
++                        batch.batch["response_mask"][is_hindsight] = batch.batch["response_mask"][is_hindsight] * batch.batch["action_mask"][is_hindsight].to(batch.batch["response_mask"].dtype)
++                        # response_mask zeroes the advantages of the masked tokens; the actor uses token_train_mask for KL/entropy
++                        batch.batch["token_train_mask"] = batch.batch["response_mask"].clone()
+                     # balance the number of valid tokens on each dp rank.
+                     # Note that this breaks the order of data inside the batch.
+                     # Please take care when you implement group based adv computation such as GRPO and rloo
+@@ -1149,6 +1209,8 @@ class RayPPOTrainer:
+                         metrics.update(old_log_prob_metrics)
+                         old_log_prob.batch.pop("entropys")
+                         batch = batch.union(old_log_prob)
++                        if "hindsight" in batch.non_tensor_batch and batch.non_tensor_batch["hindsight"].astype(bool).any():
++                            metrics.update(apply_behavior_log_probs(batch, self.config.env.hindsight.get("ratio_reference", "behavior")))
+ 
+                         if "rollout_log_probs" in batch.batch.keys():
+                             # TODO: we may want to add diff of probs too.
+@@ -1234,6 +1296,14 @@ class RayPPOTrainer:
+                             gigpo_enable_similarity= self.config.algorithm.gigpo.enable_similarity,
+                             gigpo_similarity_thresh=self.config.algorithm.gigpo.similarity_thresh,
+                         )
++                        if "hindsight" in batch.non_tensor_batch:
++                            # advantage range of hindsight vs original rows over trained tokens (truncated success copies can be large)
++                            is_hindsight = torch.from_numpy(batch.non_tensor_batch["hindsight"].astype(bool))
++                            for name, rows in (("hindsight", is_hindsight), ("original", ~is_hindsight)):
++                                values = batch.batch["advantages"][rows][batch.batch["response_mask"][rows].bool()]
++                                if values.numel():
++                                    metrics[f"hindsight/{name}_advantage_max"] = values.max().item()
++                                    metrics[f"hindsight/{name}_advantage_min"] = values.min().item()
+ 
+                     # update critic
+                     if self.use_critic:
+@@ -1295,6 +1365,7 @@ class RayPPOTrainer:
  
                  # TODO: make a canonical logger that supports various backend
                  logger.log(data=metrics, step=self.global_steps)
@@ -270,3 +514,38 @@ index d85e23a..e7a2cba 100644
  
                  progress_bar.update(1)
                  self.global_steps += 1
+diff --git a/verl/workers/actor/dp_actor.py b/verl/workers/actor/dp_actor.py
+index 853b45e..6220082 100644
+--- a/verl/workers/actor/dp_actor.py
++++ b/verl/workers/actor/dp_actor.py
+@@ -326,6 +326,8 @@ class DataParallelPPOActor(BasePPOActor):
+             select_keys.append("loss_mask")
+         if self.config.use_kl_loss:
+             select_keys.append("ref_log_prob")
++        if "token_train_mask" in data.batch.keys():  # hindsight training: 0 on hindsight rows' non-action tokens
++            select_keys.append("token_train_mask")
+         batch = data.select(batch_keys=select_keys).batch
+         has_multi_modal_inputs = "multi_modal_inputs" in data.non_tensor_batch.keys()
+ 
+@@ -407,8 +409,11 @@ class DataParallelPPOActor(BasePPOActor):
+                         loss_agg_mode=loss_agg_mode,
+                     )
+ 
++                    # token_train_mask zeroes the entropy/KL terms of hindsight rows' non-action tokens while keeping
++                    # the attention-based denominator, so no row's tokens are reweighted (absent in plain GRPO runs)
++                    train_mask = data["token_train_mask"].to(log_prob.dtype) if "token_train_mask" in data else None
+                     if entropy_coeff != 0:
+-                        entropy_loss = agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
++                        entropy_loss = agg_loss(loss_mat=entropy if train_mask is None else entropy * train_mask, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+ 
+                         # compute policy loss
+                         policy_loss = pg_loss - entropy_loss * entropy_coeff
+@@ -419,7 +424,7 @@ class DataParallelPPOActor(BasePPOActor):
+                         ref_log_prob = data["ref_log_prob"]
+                         # compute kl loss
+                         kld = kl_penalty(logprob=log_prob, ref_logprob=ref_log_prob, kl_penalty=self.config.kl_loss_type)
+-                        kl_loss = agg_loss(loss_mat=kld, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
++                        kl_loss = agg_loss(loss_mat=kld if train_mask is None else kld * train_mask, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+ 
+                         policy_loss = policy_loss + kl_loss * self.config.kl_loss_coef
+                         metrics["actor/kl_loss"] = kl_loss.detach().item()
