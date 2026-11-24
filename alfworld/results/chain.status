@@ -10,3 +10,4 @@ START baseline_seed0: bash run_alfworld_grpo_2gpu.sh grpo_alfworld_seed0 0 2026-
 SEED1_DROPPED_BY_REQUEST (chain controller stopped; seed 0 keeps running) 2026-11-24T08:55:07
 EXIT baseline_seed0 (last logged step 100) 2026-11-24T19:21:42
 CHAIN_DONE (seed 1 dropped by request) 2026-11-24T19:21:42
+START hindsight_seed0 2026-11-24T22:47:39: bash run_alfworld_hindsight_2gpu.sh grpo_alfworld_hindsight_seed0 0 trainer.save_freq=25
