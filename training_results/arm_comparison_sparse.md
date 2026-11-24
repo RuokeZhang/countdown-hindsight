@@ -13,7 +13,7 @@ Validation = greedy success on the 512-problem val set. Training columns are mea
 | 75 | baseline_n5_s0 | 1.4% | — | — | 19.5% | 188.5 | 3.4% |
 | 75 | E_split_p1_n5_s0 | 1.8% | — | — | 99.6% | 1.1 | 3.4% |
 | 100 | baseline_n5_s0 | 1.4% | — | — | 9.1% | 197.6 | 5.6% |
-| 100 | E_split_p1_n5_s0 | — | — | — | — | — | — |
+| 100 | E_split_p1_n5_s0 | 2.3% | — | — | 99.8% | 0.2 | 3.8% |
 | 125 | baseline_n5_s0 | — | — | — | — | — | — |
 | 125 | E_split_p1_n5_s0 | — | — | — | — | — | — |
 | 150 | baseline_n5_s0 | — | — | — | — | — | — |
@@ -44,7 +44,7 @@ Same windows as above. "fail claims target" = share of failed responses whose la
 | 50 | baseline_n5_s0 | 0.144 | 2.7% | 21.3% | 15.8% | 0.0 | 0.0 |
 | 50 | E_split_p1_n5_s0 | 0.030 | 2.8% | 0.1% | 0.0% | 124.5 | 147.2 |
 | 100 | baseline_n5_s0 | 0.131 | 5.6% | 21.8% | 19.8% | 0.0 | 0.0 |
-| 100 | E_split_p1_n5_s0 | — | — | — | — | — | — |
+| 100 | E_split_p1_n5_s0 | 0.032 | 3.8% | 0.0% | 0.0% | 135.0 | 159.8 |
 | 150 | baseline_n5_s0 | — | — | — | — | — | — |
 | 150 | E_split_p1_n5_s0 | — | — | — | — | — | — |
 | 200 | baseline_n5_s0 | — | — | — | — | — | — |
@@ -69,7 +69,7 @@ Mean over the seeds that have reached the step; per-seed values in seed order (�
 | 75 | baseline_n5 | 1 | 1.4% | — | — | 1.4% |
 | 75 | E_split_p1_n5 | 1 | 1.8% | — | — | 1.8% |
 | 100 | baseline_n5 | 1 | 1.4% | — | — | 1.4% |
-| 100 | E_split_p1_n5 | 0 | — | — | — | — |
+| 100 | E_split_p1_n5 | 1 | 2.3% | — | — | 2.3% |
 | 125 | baseline_n5 | 0 | — | — | — | — |
 | 125 | E_split_p1_n5 | 0 | — | — | — | — |
 | 150 | baseline_n5 | 0 | — | — | — | — |
@@ -93,6 +93,7 @@ Counts over the 512 validation problems. only E_split_p1_n5 = E_split_p1_n5 solv
 
 | step | seed | only E_split_p1_n5 | only baseline_n5 | both | neither |
 |---|---|---|---|---|---|
+| 100 | 0 | 8 | 3 | 4 | 497 |
 
 ## First validation step reaching a success level
 
@@ -101,7 +102,7 @@ Earliest validated step whose greedy val success is at least the level (— = ne
 | run | last validated step | first step >= 5% | first step >= 10% | first step >= 20% |
 |---|---|---|---|---|
 | baseline_n5_s0 | 100 | — | — | — |
-| E_split_p1_n5_s0 | 75 | — | — | — |
+| E_split_p1_n5_s0 | 100 | — | — | — |
 
 ## First 100 steps: mixed groups and hindsight samples
 
@@ -116,7 +117,7 @@ Means over every training step in the interval. Hindsight positives/negatives pe
 | 51-75 | baseline_n5_s0 | 3.2% | 0.0 | 0.0 |
 | 51-75 | E_split_p1_n5_s0 | 3.5% | 131.2 | 146.5 |
 | 76-100 | baseline_n5_s0 | 3.8% | 0.0 | 0.0 |
-| 76-100 | E_split_p1_n5_s0 | 3.1% | 141.4 | 151.8 |
+| 76-100 | E_split_p1_n5_s0 | 3.4% | 139.6 | 155.2 |
 
 ## Per-sample-split runs: pooled samples per step by class
 
@@ -127,7 +128,7 @@ Window means as above. negative_valid = valid relabel candidate kept on its orig
 | 0 | E_split_p1_n5_s0 | 21.8 | 24.1 | 272.2 | 89.0 | 54.9 |
 | 25 | E_split_p1_n5_s0 | 125.4 | 123.5 | 11.2 | 48.8 | 4.4 |
 | 50 | E_split_p1_n5_s0 | 124.5 | 124.3 | 4.1 | 16.1 | 2.7 |
-| 100 | E_split_p1_n5_s0 | — | — | — | — | — |
+| 100 | E_split_p1_n5_s0 | 135.0 | 149.6 | 0.8 | 6.6 | 2.8 |
 | 150 | E_split_p1_n5_s0 | — | — | — | — | — |
 | 200 | E_split_p1_n5_s0 | — | — | — | — | — |
 | 250 | E_split_p1_n5_s0 | — | — | — | — | — |
