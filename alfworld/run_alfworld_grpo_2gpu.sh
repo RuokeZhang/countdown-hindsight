@@ -1,7 +1,7 @@
 #!/bin/bash
-# GRPO baseline on ALFWorld (text) with verl-agent, one L40S. Starts from verl-agent's examples/grpo_trainer/run_alfworld.sh;
+# GRPO baseline on ALFWorld (text) with verl-agent, 2x A100 80GB (same GPU count as the repo script). Starts from verl-agent's examples/grpo_trainer/run_alfworld.sh;
 # every setting that differs from it is marked "# changed:".
-# Usage: bash run_alfworld_grpo_1gpu.sh <run_name> <seed> [extra hydra overrides...]
+# Usage: bash run_alfworld_grpo_2gpu.sh <run_name> <seed> [extra hydra overrides...]
 set -euo pipefail
 RUN_NAME=$1; SEED=$2; shift 2
 VERL_AGENT_DIR=${VERL_AGENT_DIR:-/root/alf/verl-agent}
@@ -11,7 +11,7 @@ source /root/alf/venv/bin/activate
 export PATH=/root/alf/venv/bin:$PATH
 export ALFWORLD_DATA=${ALFWORLD_DATA:-/root/alf/alfworld_data}
 # changed: the repo exports VLLM_ATTENTION_BACKEND=XFORMERS; xformers is not installed with vllm 0.11, so vLLM uses its default (FLASH_ATTN)
-export RAY_num_server_call_thread=1                    # changed: fewer threads per Ray process (container allows 7680)
+export RAY_num_server_call_thread=1                    # changed: fewer threads per Ray process (containers cap threads: 7680 on the L40S box, 15616 here)
 export METRICS_JSONL=${RUN_DIR}/metrics.jsonl            # changed: per-step metrics also written to a file
 cd "${VERL_AGENT_DIR}"
 
@@ -40,23 +40,23 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 `# changed: 32 -> 4 (memory only; one GPU)` \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.01 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 `# changed: 32 -> 4 (memory only)` \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=1 `# changed: 2 -> 1 (one GPU)` \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 `# changed: 0.6 -> 0.3, vLLM shares the one GPU with the FSDP actor (memory only)` \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.enable_chunked_prefill=False \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.free_cache_engine=False \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.4 \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
-    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 `# changed: 32 -> 4 (memory only)` \
+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.use_invalid_action_penalty=True \
     actor_rollout_ref.actor.invalid_action_penalty_coef=0.1 \
@@ -73,7 +73,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.logger=['console'] `# changed: console+wandb -> console (no wandb account)` \
     trainer.project_name='verl_agent_alfworld' \
     trainer.experiment_name=${RUN_NAME} \
-    trainer.n_gpus_per_node=1 `# changed: 2 -> 1` \
+    trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=25 `# changed: 5 -> 25` \
