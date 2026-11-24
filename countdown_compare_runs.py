@@ -119,7 +119,7 @@ def main():
             for name, dirs in seed_groups.items():
                 rows = [load_jsonl_by_step(os.path.join(d, "validation_stats.jsonl")).get(step) if os.path.exists(os.path.join(d, "validation_stats.jsonl")) else None for d in dirs]
                 present = [row for row in rows if row]
-                means = [sum(row[key] for row in present) / len(present) if present else None for key in ("val_greedy_success_all", "val_greedy_success_3", "val_greedy_success_4")]
+                means = [sum(row[key] for row in present) / len(present) if present and all(key in row for row in present) else None for key in ("val_greedy_success_all", "val_greedy_success_3", "val_greedy_success_4")]
                 per_seed = ", ".join(format_percent(row["val_greedy_success_all"]) if row else "—" for row in rows)
                 lines.append(f"| {step} | {name} | {len(present)} | " + " | ".join(format_percent(m) for m in means) + f" | {per_seed} |")
     if args.paired_groups:
