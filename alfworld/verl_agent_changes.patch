@@ -1,5 +1,5 @@
 diff --git a/agent_system/environments/env_manager.py b/agent_system/environments/env_manager.py
-index ab09dff..b85db5d 100644
+index ab09dff..92f4a24 100644
 --- a/agent_system/environments/env_manager.py
 +++ b/agent_system/environments/env_manager.py
 @@ -240,6 +240,14 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
@@ -17,18 +17,20 @@ index ab09dff..b85db5d 100644
  
  
  class SokobanEnvironmentManager(EnvironmentManagerBase):
-@@ -637,7 +645,8 @@ def make_envs(config):
+@@ -637,7 +645,10 @@ def make_envs(config):
              raise ValueError(f"Unsupported environment: {config.env.env_name}")
  
          env_kwargs = {
 -            'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution' or 'eval_out_of_distribution'
 +            'eval_dataset': config.env.alfworld.eval_dataset, # 'eval_in_distribution', 'eval_out_of_distribution' or 'both'
 +            'train_data_path': config.env.alfworld.get('train_data_path'),  # restrict training games to this directory
++            'train_envs_per_worker': config.env.alfworld.get('train_envs_per_worker'),  # envs per Ray actor (default: one group)
++            'eval_envs_per_worker': config.env.alfworld.get('eval_envs_per_worker') or 10,
          }
          _envs = build_alfworld_envs(alf_config_path, config.env.seed, config.data.train_batch_size, group_n, is_train=True, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
          _val_envs = build_alfworld_envs(alf_config_path, config.env.seed + 1000, config.data.val_batch_size, 1, is_train=False, env_kwargs=env_kwargs, resources_per_worker=resources_per_worker)
 diff --git a/agent_system/environments/env_package/alfworld/envs.py b/agent_system/environments/env_package/alfworld/envs.py
-index e72f621..72928c2 100644
+index e72f621..f1e652e 100644
 --- a/agent_system/environments/env_package/alfworld/envs.py
 +++ b/agent_system/environments/env_package/alfworld/envs.py
 @@ -13,6 +13,7 @@
@@ -95,7 +97,7 @@ index e72f621..72928c2 100644
 +            # Same games and seeds as the original one-env-per-actor layout: env i is seeded with seed + i // group_n.
 +            base_env = get_environment(env_type)(config, train_eval='train')
 +            base_envs = [base_env] * self.num_processes
-+            envs_per_worker = group_n
++            envs_per_worker = env_kwargs.get('train_envs_per_worker') or group_n
 +        elif eval_dataset == 'both':
 +            # Every valid_seen and valid_unseen game exactly once: env i always plays game i.
 +            games = []
@@ -159,15 +161,50 @@ index e72f621..72928c2 100644
          for i, (obs, info) in enumerate(results):
              for k in info.keys():
                  info[k] = info[k][0] 
+diff --git a/agent_system/multi_turn_rollout/rollout_loop.py b/agent_system/multi_turn_rollout/rollout_loop.py
+index d79e678..dab91a0 100644
+--- a/agent_system/multi_turn_rollout/rollout_loop.py
++++ b/agent_system/multi_turn_rollout/rollout_loop.py
+@@ -350,10 +350,18 @@ class TrajectoryCollector:
+             batch_input.meta_info = gen_batch.meta_info
+ 
+             # pad to be divisible by dp_size
+-            batch_input_padded, pad_size = pad_dataproto_to_divisor(batch_input, actor_rollout_wg.world_size)
++            # Generate only for envs that are still running. Rows of finished envs are dropped later (active_masks),
++            # so they just reuse an active row's output as filler; this skips their generation.
++            active_indices = np.nonzero(active_masks)[0]
++            skip_finished = self.config.env.get("skip_finished_generation", False) and len(active_indices) < batch_size
++            generation_input = batch_input.select_idxs(active_indices) if skip_finished else batch_input
++            batch_input_padded, pad_size = pad_dataproto_to_divisor(generation_input, actor_rollout_wg.world_size)
+             batch_output_padded = actor_rollout_wg.generate_sequences(batch_input_padded)
+-            # # unpad
+             batch_output = unpad_dataproto(batch_output_padded, pad_size=pad_size)
++            if skip_finished:
++                row_in_generated = np.zeros(batch_size, dtype=np.int64)
++                row_in_generated[active_indices] = np.arange(len(active_indices))
++                batch_output = batch_output.select_idxs(row_in_generated)
+ 
+             batch.non_tensor_batch['uid'] = uid_batch
+             batch.non_tensor_batch['traj_uid'] = traj_uid
 diff --git a/verl/trainer/config/ppo_trainer.yaml b/verl/trainer/config/ppo_trainer.yaml
-index d0f68ba..305b1c7 100644
+index d0f68ba..947ca48 100644
 --- a/verl/trainer/config/ppo_trainer.yaml
 +++ b/verl/trainer/config/ppo_trainer.yaml
-@@ -301,6 +301,7 @@ env:
+@@ -293,6 +293,7 @@ env:
+   env_name: alfworld/AlfredTWEnv
+   seed: 0
+   max_steps: 50
++  skip_finished_generation: false
+   history_length: 2
+   resources_per_worker: # resources for each env worker
+     num_cpus: 0.1
+@@ -301,6 +302,9 @@ env:
      n: 1 # the group number of envs (for GRPO and GiGPO).
    alfworld:
      eval_dataset: eval_in_distribution
 +    train_data_path: null
++    train_envs_per_worker: null
++    eval_envs_per_worker: null
    search:
      log_requests: false
      search_url: "http://127.0.0.1:8000/retrieve" # also support multiple urls: ["http://127.0.0.1:8000/retrieve", "http://127.0.0.1:8001/retrieve"]
