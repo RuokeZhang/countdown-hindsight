@@ -1,0 +1,17 @@
+action-token ratio buckets: {'0.8_to_1.2': 0.935, 'above_1.2': 0.03, 'below_0.8': 0.034}
+
+== ratio over action tokens ==
+per-turn log ratio quantiles (5/25/50/75/95%): [-1.44, -0.26, -0.01, 0.14, 0.85]
+successful copies: 184 episodes, mean turns 30.1; log10 of product weight quantiles (5/25/50/75/95%): [-7.65, -2.83, -0.67, 0.34, 2.37]; weight < 0.01: 33.2%, > 100: 7.1%
+failed copies: 648 episodes, mean turns 50.0; log10 of product weight quantiles (5/25/50/75/95%): [-13.36, -4.9, -1.8, -0.08, 1.76]; weight < 0.01: 47.5%, > 100: 4.6%
+per-decision weights (prefix products over all turns): in [0.5, 2]: 23.1%, < 0.01: 28.3%, > 100: 2.8%
+self-normalized ESS per group of 8 (episode weights): mean 1.78, quantiles [1.0, 1.07, 1.53, 2.07, 3.43]; largest episode's share of the group weight: median 0.79
+self-normalized ESS over all 184 successful copies: 1.1
+
+== ratio over full tokens ==
+per-turn log ratio quantiles (5/25/50/75/95%): [-37.6, -22.09, -11.86, -2.46, 1.04]
+successful copies: 184 episodes, mean turns 30.1; log10 of product weight quantiles (5/25/50/75/95%): [-441.9, -225.33, -123.38, -83.73, -35.12]; weight < 0.01: 100.0%, > 100: 0.0%
+failed copies: 648 episodes, mean turns 50.0; log10 of product weight quantiles (5/25/50/75/95%): [-569.47, -401.67, -286.21, -194.35, -109.51]; weight < 0.01: 100.0%, > 100: 0.0%
+per-decision weights (prefix products over all turns): in [0.5, 2]: 0.0%, < 0.01: 99.9%, > 100: 0.0%
+self-normalized ESS per group of 8 (episode weights): mean 1.01, quantiles [1.0, 1.0, 1.0, 1.0, 1.0]; largest episode's share of the group weight: median 1.0
+self-normalized ESS over all 184 successful copies: 1.0

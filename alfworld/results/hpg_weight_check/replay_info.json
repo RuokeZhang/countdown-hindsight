@@ -1,0 +1,3024 @@
+{
+ "groups": [
+  {
+   "group": 2,
+   "goal": [
+    "put",
+    "fork",
+    "drawer"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    43,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 6,
+   "goal": [
+    "put",
+    "soapbottle",
+    "drawer"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    29
+   ]
+  },
+  {
+   "group": 24,
+   "goal": [
+    "put",
+    "saltshaker",
+    "cabinet"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    28,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 30,
+   "goal": [
+    "put",
+    "soapbar",
+    "toilet"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    28,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 39,
+   "goal": [
+    "put",
+    "laptop",
+    "armchair"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    48
+   ]
+  },
+  {
+   "group": 47,
+   "goal": [
+    "put",
+    "book",
+    "sidetable"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    47,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 50,
+   "goal": [
+    "put",
+    "cd",
+    "desk"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    33
+   ]
+  },
+  {
+   "group": 53,
+   "goal": [
+    "look",
+    "alarmclock",
+    "desklamp"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    36,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 77,
+   "goal": [
+    "put",
+    "watch",
+    "shelf"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    47,
+    null
+   ]
+  },
+  {
+   "group": 82,
+   "goal": [
+    "cool",
+    "bowl",
+    "fridge"
+   ],
+   "anchor": 6,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    20,
+    36,
+    25,
+    25,
+    null,
+    null,
+    28,
+    null
+   ]
+  },
+  {
+   "group": 85,
+   "goal": [
+    "put",
+    "cloth",
+    "countertop"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    25,
+    null,
+    null,
+    22,
+    22,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 86,
+   "goal": [
+    "put",
+    "cloth",
+    "drawer"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    49,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 88,
+   "goal": [
+    "hot",
+    "cup",
+    "microwave"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    23,
+    36
+   ]
+  },
+  {
+   "group": 89,
+   "goal": [
+    "put",
+    "cloth",
+    "drawer"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    22,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 91,
+   "goal": [
+    "put",
+    "fork",
+    "countertop"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    38,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 95,
+   "goal": [
+    "put",
+    "kettle",
+    "shelf"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    8,
+    27,
+    32,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 97,
+   "goal": [
+    "clean",
+    "pot",
+    "stoveburner"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    31,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 101,
+   "goal": [
+    "put",
+    "ladle",
+    "cabinet"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    29,
+    null,
+    50,
+    null
+   ]
+  },
+  {
+   "group": 103,
+   "goal": [
+    "put",
+    "potato",
+    "diningtable"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    48,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 104,
+   "goal": [
+    "put",
+    "bowl",
+    "countertop"
+   ],
+   "anchor": 1,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    47,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 105,
+   "goal": [
+    "put",
+    "pan",
+    "stoveburner"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    38,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 106,
+   "goal": [
+    "cool",
+    "plate",
+    "fridge"
+   ],
+   "anchor": 2,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    47,
+    null,
+    35,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 108,
+   "goal": [
+    "put",
+    "soapbottle",
+    "cabinet"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    35,
+    null
+   ]
+  },
+  {
+   "group": 109,
+   "goal": [
+    "put",
+    "soapbar",
+    "cabinet"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    48,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 110,
+   "goal": [
+    "put",
+    "soapbottle",
+    "cart"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    8,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 113,
+   "goal": [
+    "put",
+    "soapbar",
+    "bathtubbasin"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    25,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 114,
+   "goal": [
+    "put",
+    "spatula",
+    "drawer"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    40,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 115,
+   "goal": [
+    "put",
+    "spatula",
+    "drawer"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    12,
+    null
+   ]
+  },
+  {
+   "group": 116,
+   "goal": [
+    "put",
+    "knife",
+    "drawer"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    23
+   ]
+  },
+  {
+   "group": 119,
+   "goal": [
+    "hot",
+    "tomato",
+    "microwave"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    34,
+    null
+   ]
+  },
+  {
+   "group": 120,
+   "goal": [
+    "cool",
+    "apple",
+    "diningtable"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    14,
+    null,
+    26,
+    null,
+    null,
+    36,
+    null,
+    37
+   ]
+  },
+  {
+   "group": 121,
+   "goal": [
+    "put",
+    "apple",
+    "diningtable"
+   ],
+   "anchor": 6,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    41,
+    null,
+    8,
+    9,
+    19,
+    null,
+    10,
+    null
+   ]
+  },
+  {
+   "group": 123,
+   "goal": [
+    "cool",
+    "apple",
+    "fridge"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    16,
+    21,
+    null,
+    37,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 124,
+   "goal": [
+    "put",
+    "kettle",
+    "countertop"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    37,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 126,
+   "goal": [
+    "hot",
+    "apple",
+    "fridge"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    25,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 128,
+   "goal": [
+    "cool",
+    "egg",
+    "fridge"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    36,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 130,
+   "goal": [
+    "put",
+    "pot",
+    "cabinet"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    48,
+    null
+   ]
+  },
+  {
+   "group": 131,
+   "goal": [
+    "put",
+    "cup",
+    "cabinet"
+   ],
+   "anchor": 1,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    41,
+    23,
+    25,
+    null,
+    null,
+    11,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 133,
+   "goal": [
+    "hot",
+    "mug",
+    "fridge"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    42,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 134,
+   "goal": [
+    "put",
+    "mug",
+    "countertop"
+   ],
+   "anchor": 1,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    15,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 135,
+   "goal": [
+    "cool",
+    "cup",
+    "fridge"
+   ],
+   "anchor": 2,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    47,
+    null,
+    14,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 137,
+   "goal": [
+    "cool",
+    "pot",
+    "fridge"
+   ],
+   "anchor": 1,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    32,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 139,
+   "goal": [
+    "hot",
+    "egg",
+    "fridge"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    49,
+    49
+   ]
+  },
+  {
+   "group": 140,
+   "goal": [
+    "put",
+    "egg",
+    "sidetable"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    31,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 141,
+   "goal": [
+    "put",
+    "bowl",
+    "countertop"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    43,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 142,
+   "goal": [
+    "put",
+    "mug",
+    "coffeemachine"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    12,
+    null,
+    25,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 143,
+   "goal": [
+    "put",
+    "mug",
+    "shelf"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    46,
+    39,
+    null,
+    41,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 144,
+   "goal": [
+    "put",
+    "mug",
+    "shelf"
+   ],
+   "anchor": 1,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    43,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 148,
+   "goal": [
+    "put",
+    "potato",
+    "countertop"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    32,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 149,
+   "goal": [
+    "put",
+    "potato",
+    "countertop"
+   ],
+   "anchor": 1,
+   "rewards": [
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    18,
+    4,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 150,
+   "goal": [
+    "put",
+    "kettle",
+    "diningtable"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    24,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 152,
+   "goal": [
+    "cool",
+    "pot",
+    "fridge"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    32,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 154,
+   "goal": [
+    "put",
+    "pot",
+    "countertop"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    16,
+    null,
+    null,
+    50,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 155,
+   "goal": [
+    "cool",
+    "tomato",
+    "diningtable"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    42,
+    49,
+    null,
+    26
+   ]
+  },
+  {
+   "group": 156,
+   "goal": [
+    "cool",
+    "tomato",
+    "diningtable"
+   ],
+   "anchor": 3,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    32,
+    null,
+    null,
+    39,
+    46,
+    30,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 157,
+   "goal": [
+    "cool",
+    "pan",
+    "stoveburner"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    42,
+    null,
+    null,
+    null,
+    null,
+    39
+   ]
+  },
+  {
+   "group": 158,
+   "goal": [
+    "cool",
+    "tomato",
+    "fridge"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    29,
+    44,
+    50,
+    null
+   ]
+  },
+  {
+   "group": 159,
+   "goal": [
+    "cool",
+    "lettuce",
+    "fridge"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    44
+   ]
+  },
+  {
+   "group": 163,
+   "goal": [
+    "put",
+    "saltshaker",
+    "countertop"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    49,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 165,
+   "goal": [
+    "put",
+    "pan",
+    "diningtable"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    50,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 170,
+   "goal": [
+    "clean",
+    "cup",
+    "sinkbasin"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    49,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 171,
+   "goal": [
+    "hot",
+    "mug",
+    "shelf"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    42,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 174,
+   "goal": [
+    "hot",
+    "potato",
+    "microwave"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    13,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 178,
+   "goal": [
+    "put",
+    "egg",
+    "diningtable"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    42,
+    null,
+    null,
+    25,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 179,
+   "goal": [
+    "cool",
+    "bowl",
+    "fridge"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    16
+   ]
+  },
+  {
+   "group": 183,
+   "goal": [
+    "put",
+    "apple",
+    "countertop"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    38,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 184,
+   "goal": [
+    "put",
+    "pan",
+    "stoveburner"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    10,
+    19,
+    27,
+    18,
+    14,
+    33,
+    11
+   ]
+  },
+  {
+   "group": 188,
+   "goal": [
+    "cool",
+    "potato",
+    "fridge"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    27,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 189,
+   "goal": [
+    "put",
+    "potato",
+    "diningtable"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    28,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 190,
+   "goal": [
+    "put",
+    "pot",
+    "stoveburner"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    17,
+    30,
+    null,
+    15,
+    24,
+    7,
+    null
+   ]
+  },
+  {
+   "group": 191,
+   "goal": [
+    "cool",
+    "cup",
+    "cabinet"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    41,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 196,
+   "goal": [
+    "put",
+    "lettuce",
+    "countertop"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    24,
+    null
+   ]
+  },
+  {
+   "group": 197,
+   "goal": [
+    "cool",
+    "bowl",
+    "diningtable"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    35,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 199,
+   "goal": [
+    "put",
+    "bread",
+    "countertop"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    29
+   ]
+  },
+  {
+   "group": 200,
+   "goal": [
+    "put",
+    "alarmclock",
+    "desk"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    32,
+    null,
+    45,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 201,
+   "goal": [
+    "put",
+    "alarmclock",
+    "dresser"
+   ],
+   "anchor": 5,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    35,
+    50,
+    29,
+    5,
+    null,
+    23,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 202,
+   "goal": [
+    "put",
+    "cd",
+    "drawer"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    48,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 203,
+   "goal": [
+    "put",
+    "pencil",
+    "drawer"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    30,
+    null,
+    50,
+    null
+   ]
+  },
+  {
+   "group": 204,
+   "goal": [
+    "put",
+    "cd",
+    "drawer"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    39,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    18
+   ]
+  },
+  {
+   "group": 205,
+   "goal": [
+    "put",
+    "cellphone",
+    "armchair"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    12,
+    null
+   ]
+  },
+  {
+   "group": 206,
+   "goal": [
+    "put",
+    "cellphone",
+    "bed"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    42,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 207,
+   "goal": [
+    "put",
+    "cellphone",
+    "diningtable"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    24,
+    null,
+    36,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 208,
+   "goal": [
+    "put",
+    "cellphone",
+    "drawer"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    32,
+    null,
+    null,
+    null,
+    39,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 209,
+   "goal": [
+    "put",
+    "creditcard",
+    "armchair"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    44,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 210,
+   "goal": [
+    "put",
+    "creditcard",
+    "sofa"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    29,
+    null,
+    null,
+    21,
+    17,
+    23,
+    null
+   ]
+  },
+  {
+   "group": 211,
+   "goal": [
+    "hot",
+    "cup",
+    "microwave"
+   ],
+   "anchor": 6,
+   "rewards": [
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    36,
+    21,
+    null,
+    null,
+    null,
+    null,
+    40,
+    null
+   ]
+  },
+  {
+   "group": 212,
+   "goal": [
+    "two",
+    "handtowel",
+    "handtowelholder"
+   ],
+   "anchor": 2,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    29,
+    null,
+    35,
+    22,
+    null,
+    null,
+    15,
+    null
+   ]
+  },
+  {
+   "group": 214,
+   "goal": [
+    "put",
+    "remotecontrol",
+    "armchair"
+   ],
+   "anchor": 0,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    28,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 216,
+   "goal": [
+    "put",
+    "cellphone",
+    "desk"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    33
+   ]
+  },
+  {
+   "group": 217,
+   "goal": [
+    "put",
+    "mug",
+    "desk"
+   ],
+   "anchor": 4,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    14,
+    19,
+    29,
+    33,
+    12,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 218,
+   "goal": [
+    "put",
+    "newspaper",
+    "armchair"
+   ],
+   "anchor": 1,
+   "rewards": [
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    38,
+    23,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 219,
+   "goal": [
+    "put",
+    "newspaper",
+    "sofa"
+   ],
+   "anchor": 3,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    32,
+    null,
+    null,
+    38,
+    null
+   ]
+  },
+  {
+   "group": 220,
+   "goal": [
+    "put",
+    "pen",
+    "sidetable"
+   ],
+   "anchor": 1,
+   "rewards": [
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    18,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 221,
+   "goal": [
+    "put",
+    "peppershaker",
+    "diningtable"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    30,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 222,
+   "goal": [
+    "put",
+    "peppershaker",
+    "shelf"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    33,
+    null,
+    null,
+    null,
+    9,
+    null
+   ]
+  },
+  {
+   "group": 225,
+   "goal": [
+    "put",
+    "soapbottle",
+    "garbagecan"
+   ],
+   "anchor": 1,
+   "rewards": [
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    32,
+    14,
+    24,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 226,
+   "goal": [
+    "put",
+    "soapbar",
+    "garbagecan"
+   ],
+   "anchor": 7,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    15
+   ]
+  },
+  {
+   "group": 227,
+   "goal": [
+    "put",
+    "candle",
+    "cabinet"
+   ],
+   "anchor": 4,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    10,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 231,
+   "goal": [
+    "put",
+    "cloth",
+    "garbagecan"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    33,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 233,
+   "goal": [
+    "put",
+    "tissuebox",
+    "cart"
+   ],
+   "anchor": 6,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    40,
+    null,
+    null,
+    26,
+    32
+   ]
+  },
+  {
+   "group": 235,
+   "goal": [
+    "put",
+    "toiletpaper",
+    "cabinet"
+   ],
+   "anchor": 5,
+   "rewards": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    50,
+    null,
+    null,
+    null,
+    9,
+    23,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 236,
+   "goal": [
+    "put",
+    "toiletpaper",
+    "drawer"
+   ],
+   "anchor": 5,
+   "rewards": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    30,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 238,
+   "goal": [
+    "put",
+    "toiletpaper",
+    "cabinet"
+   ],
+   "anchor": 2,
+   "rewards": [
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    null,
+    null,
+    12,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "group": 239,
+   "goal": [
+    "put",
+    "vase",
+    "coffeetable"
+   ],
+   "anchor": 2,
+   "rewards": [
+    1.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "goal_steps": [
+    40,
+    null,
+    45,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  }
+ ],
+ "feedback_mismatches": 0,
+ "replayed_turns": 41600,
+ "kept_turns": 37941,
+ "turns_without_task_text": 0
+}

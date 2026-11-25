@@ -38,6 +38,7 @@ run seed, console logging, no XFORMERS, Ray thread settings).
 | `relabel_preview.py` | offline relabel simulation from state achievements (LfH gate vs all-failed groups) |
 | `llm_relabel.py`, `results/precheck/llm_relabel_prompt_v*.jsonl` | DeepSeek-V4-Pro relabel of every failed episode in all-failed groups, checked by the state checker (v1 had an action-extraction bug; v2 is the reference) |
 | `build_relabel_viewer.py` | viewer: https://alfworld-hindsight-relabel.jaade1107.workers.dev |
+| `hpg_weight_check.py`, `results/hpg_weight_check/` | offline check of HPG product-over-steps importance weights: replays the precheck episodes (prompts identical, 0 feedback mismatches), scores every turn under g and g' with the base model and the hindsight step-50 checkpoint |
 | `speed_test.sh`, `results/speed_test/` | 3-step timing of the speed options (A: 2 envs per actor + skip finished generation + ref not offloaded; B: A + vLLM TP 1) |
 
 Tests (training box): `cd /root/alf/hs && ALFWORLD_DATA=/root/alf/alfworld_data /root/alf/venv/bin/python -m unittest test_precheck_tracker -v`
