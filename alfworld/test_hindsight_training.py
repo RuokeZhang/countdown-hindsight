@@ -259,5 +259,60 @@ class TestTokenMeanWeights(unittest.TestCase):
         self.assertTrue(torch.allclose(weights, torch.full_like(weights, 1 / 404)))
 
 
+class TestHindsightMasks(unittest.TestCase):
+    def test_attention_kept_action_masked_and_rows_spread(self):
+        from verl.trainer.ppo.ray_trainer import apply_hindsight_masks, compute_response_mask
+        num_original, num_hindsight, prompt_length, response_length = 96, 48, 3, 6
+        rows = num_original + num_hindsight
+        attention_mask = torch.ones(rows, prompt_length + response_length, dtype=torch.long)
+        action_mask = torch.zeros(rows, response_length)
+        action_mask[:, 4:] = 1
+        is_hindsight = np.array([False] * num_original + [True] * num_hindsight, dtype=object)
+        batch = DataProto.from_dict(tensors={"attention_mask": attention_mask.clone(), "responses": torch.zeros(rows, response_length, dtype=torch.long),
+                                             "action_mask": action_mask},
+                                    non_tensors={"hindsight": is_hindsight, "row_key": np.array([str(i) for i in range(rows)], dtype=object)})
+        batch.batch["response_mask"] = compute_response_mask(batch)      # a view of attention_mask
+        apply_hindsight_masks(batch, action_only_mask=True, shuffle_seed=0)
+        self.assertTrue(torch.equal(batch.batch["attention_mask"], attention_mask))   # thought tokens stay in the input
+        flags = batch.non_tensor_batch["hindsight"].astype(bool)
+        self.assertTrue(torch.equal(batch.batch["hindsight_flag"], torch.from_numpy(flags).float()))
+        self.assertTrue(torch.equal(batch.batch["response_mask"][flags], action_mask[:num_hindsight].long()))
+        self.assertTrue(torch.equal(batch.batch["response_mask"][~flags], torch.ones(num_original, response_length, dtype=torch.long)))
+        self.assertTrue(torch.equal(batch.batch["token_train_mask"], batch.batch["response_mask"]))
+        self.assertNotEqual([int(k) for k in batch.non_tensor_batch["row_key"]], list(range(rows)))
+        for start in range(0, rows, 16):       # every mini-batch of 16 rows mixes original and hindsight rows
+            self.assertTrue(0 < flags[start:start + 16].sum() < 16)
+
+
+class TestHindsightLossTerm(unittest.TestCase):
+    def test_equal_weight_per_hindsight_token_across_micro_batches(self):
+        from verl.workers.actor.dp_actor import hindsight_loss_term
+        short_tokens = torch.zeros(4, requires_grad=True)
+        long_tokens = torch.zeros(400, requires_grad=True)
+        total = (hindsight_loss_term(short_tokens.mean(), 4, 404, 0.1, None)
+                 + hindsight_loss_term(long_tokens.mean(), 400, 404, 0.1, None))
+        total.backward()
+        self.assertTrue(torch.allclose(short_tokens.grad, torch.full((4,), 0.1 / 404)))
+        self.assertTrue(torch.allclose(long_tokens.grad, torch.full((400,), 0.1 / 404)))
+
+    def test_cap_drops_the_gradient(self):
+        from verl.workers.actor.dp_actor import hindsight_loss_term
+        tokens = torch.full((4,), 2.0, requires_grad=True)
+        hindsight_loss_term(tokens.mean(), 4, 4, 0.1, cap=1.0).backward()
+        self.assertTrue(torch.equal(tokens.grad, torch.zeros(4)))
+        tokens.grad = None
+        hindsight_loss_term(tokens.mean(), 4, 4, 0.1, cap=3.0).backward()
+        self.assertTrue(torch.allclose(tokens.grad, torch.full((4,), 0.1 / 4)))
+
+    def test_near_equal_sizes(self):
+        from verl.workers.actor.dp_actor import near_equal_sizes
+        for num_rows, num_parts in ((4500, 24), (193, 7), (9, 5), (3, 8)):
+            sizes = near_equal_sizes(num_rows, num_parts)
+            self.assertEqual(len(sizes), min(num_rows, num_parts))
+            self.assertEqual(sum(sizes), num_rows)
+            self.assertLessEqual(max(sizes) - min(sizes), 1)
+        self.assertEqual([len(part) for part in torch.arange(9).split(near_equal_sizes(9, 5))], [2, 2, 2, 2, 1])
+
+
 if __name__ == "__main__":
     unittest.main()

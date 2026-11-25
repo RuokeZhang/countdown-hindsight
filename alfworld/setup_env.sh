@@ -6,6 +6,7 @@ export PATH=/root/.local/bin:$PATH
 mkdir -p /root/alf && cd /root/alf
 git clone -q https://github.com/langfengQ/verl-agent.git && cd verl-agent && git checkout -q 20bd331bdbc9026a5668e11362178e10ab7400c8
 git apply /root/alf/hs/verl_agent_changes.patch
+cp /root/alf/hs/hindsight.py agent_system/environments/env_package/alfworld/hindsight.py   # untracked, so not in the patch
 cd /root/alf
 uv venv --python 3.12 venv
 source venv/bin/activate
